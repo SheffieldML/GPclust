@@ -3,7 +3,6 @@
 
 import numpy as np
 import pylab as pb
-import sys
 import GPy
 import time
 
