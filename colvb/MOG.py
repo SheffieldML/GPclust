@@ -31,8 +31,8 @@ class MOG(collapsed_mixture):
         #computations needed for bound, gradient and predictions
         self.kNs = self.phi_hat + self.k0
         self.vNs = self.phi_hat + self.v0
-        self.Xsumk = np.sum(self.X[:,:,None]*self.phi[:,None,:],0) #D x K
-        Ck = np.sum(self.phi[:,None,None,:]*self.XXT[:,:,:,None],0)# D x D x K
+        self.Xsumk = np.tensordot(self.X,self.phi,((0),(0))) #D x K
+        Ck = np.tensordot(self.phi, self.XXT,((0),(0))).T# D x D x K
         self.mun = (self.k0*self.m0[:,None] + self.Xsumk)/self.kNs[None,:] # D x K
         self.munmunT = self.mun[:,None,:]*self.mun[None,:,:]
         self.Sns = self.S0[:,:,None] + Ck + self.k0m0m0T[:,:,None] - self.kNs[None,None,:]*self.munmunT
