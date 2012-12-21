@@ -16,8 +16,8 @@ class MOG(collapsed_mixture):
 
         #prior cluster parameters
         self.m0 = self.X.mean(0) # priors on the Gaussian components
-        self.k0 = 1e-3
-        self.S0 = np.eye(self.D)*1.
+        self.k0 = 1e-6
+        self.S0 = np.eye(self.D)*1e-3
         self.S0_halflogdet = np.sum(np.log(np.sqrt(np.diag(self.S0))))
         self.v0 = self.D+1.
 

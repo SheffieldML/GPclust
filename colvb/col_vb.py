@@ -5,6 +5,7 @@ import numpy as np
 import pylab as pb
 import GPy
 import time
+import sys #for flushing
 
 class col_vb(GPy.core.model):
     """
