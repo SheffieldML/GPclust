@@ -14,7 +14,8 @@ class collapsed_mixture(col_vb):
 
     We inherrt from this to miuld mixtures of Gaussians, mixures of GPs etc.
 
-    This handles the mixing proportion part of the model (TODO) as well as providing generic functions for merge-split approach
+    This handles the mixing proportion part of the model,
+    as well as providing generic functions for a merge-split approach
     """
     def __init__(self, N,K, prior_Z='symmetric', alpha=1.0):
         """
@@ -173,7 +174,7 @@ class collapsed_mixture(col_vb):
 
 
 class mix_gradchecker(collapsed_mixture):
-    """only for debugginf the gradients of the DP part of the bound"""
+    """only for debugging the gradients of the DP part of the bound"""
     def check(self,x=None):
         if x is None:
             x = np.random.randn(self.N,self.K)
