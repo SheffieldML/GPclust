@@ -1,0 +1,4 @@
+colvb
+=====
+
+Collapsed Variational Bayes
