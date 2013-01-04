@@ -8,4 +8,4 @@ James Hensman, Magnus Rattray, Neil D. Lawrence
 
 http://arxiv.org/abs/1206.5162
 
-Nothing to see yet: check back soon!
+Mixtures of Gaussians (MOG) and Latent Dirichlet Allocation (LDA) are up, with examples. 
