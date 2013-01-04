@@ -1,3 +1,6 @@
+# Copyright (c) 2012 James Hensman
+# Licensed under the GPL v3 (see LICENSE.txt)
+
 import numpy as np
 import pylab as pb
 from scipy import optimize, linalg

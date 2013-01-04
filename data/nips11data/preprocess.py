@@ -1,7 +1,21 @@
+# Copyright (c) 2012 James Hensman
+# Licensed under the GPL v3 (see LICENSE.txt)
+
 import string
 import os
 import re
 import numpy as np
+
+"""
+The NIPS 2011 papers were fetched from 
+
+http://books.nips.cc/nips24/nips24.zip
+
+unzipped, and run through pdf2text, putting the resulting files in ./txt
+before running this file.
+
+Apologies for the dumb processing. I'm not really an NLP expert :)
+"""
 
 
 f = file('../english.stop')
