@@ -58,13 +58,13 @@ class col_vb(GPy.core.model):
     def log_likelihood_gradients(self):
         """ Returns the gradient of the bound w.r.t. the non-variational parameters"""
         raise NotImplementedError
-    def set_param(self,x):
+    def _set_params(self,x):
         """
         Set the non-variational parameters.
         Here we assume that there are no parameters...
         """
         pass
-    def get_param(self):
+    def _get_params(self):
         """Returns the non-variational parameters"""
         return np.zeros(0)
 
@@ -302,7 +302,7 @@ class col_vb(GPy.core.model):
     def optimize_parameters(self):
         """ optimises the model parameters (non variational parameters)
         Returns the increment in the bound acheived"""
-        if self.get_param().size:
+        if self._get_params().size:
             start = self.bound()
             GPy.core.model.optimize(self,**self.hyperparam_opt_args)
             return self.bound()-start
