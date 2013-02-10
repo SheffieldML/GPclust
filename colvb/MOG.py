@@ -67,7 +67,7 @@ class MOG(collapsed_mixture):
 
     def predict_components_ln(self, Xnew):
         """The predictive density under each component"""
-        Dist =     Xnew[:,:,np.newaxis]-self.mun[np.newaxis,:,:] # Nnew x D x K
+        Dist = Xnew[:,:,np.newaxis]-self.mun[np.newaxis,:,:] # Nnew x D x K
         tmp = np.sum(Dist[:,:,None,:]*self.Sns_inv[None,:,:,:],1)#*(kn+1.)/(kn*(vn-self.D+1.))
         mahalanobis = np.sum(tmp*Dist, 1)/(self.kNs+1.)*self.kNs*(self.vNs-self.D+1.)
         halflndetSigma = self.Sns_halflogdet + 0.5*self.D*np.log((self.kNs+1.)/(self.kNs*(self.vNs-self.D+1.)))
