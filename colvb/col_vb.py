@@ -151,29 +151,29 @@ class col_vb(GPy.core.model):
 
     def checkgrad_vb(self,**kwargs):
         """subvert GPy's checkgrad routine to check the vb gradients"""
-        eg = self.extract_gradients
-        self.extract_gradients = lambda : self.vb_grad_natgrad()[0]
+        eg = self._log_likelihood_gradients_transformed
+        self._log_likelihood_gradients_transformed = lambda : self.vb_grad_natgrad()[0]
 
-        ep = self.expand_param
-        self.expand_param = lambda x: self.set_vb_param(x)
+        ep = self._set_params_transformed
+        self._set_params_transformed = lambda x: self.set_vb_param(x)
 
         lp = self.log_prior
         self.log_p = lambda x: 0.
 
-        et = self.extract_param
-        self.extract_param = lambda : self.get_vb_param()
+        et = self._get_params_transformed
+        self._get_params_transformed = lambda : self.get_vb_param()
 
-        en = self.extract_param_names
+        en = self._get_param_names_transformed
         pn = [str(i) for i in range(self.get_vb_param().size)]
-        self.extract_param_names = lambda : pn
+        self._get_param_names_transformed = lambda : pn
 
         ret = self.checkgrad(**kwargs)
 
-        self.extract_gradients = eg
-        self.expand_param = ep
+        self._log_likelihood_gradients_transformed = eg
+        self._set_params_transformed = ep
         self.log_prior = lp
-        self.extract_param = et
-        self.extract_param_names = en
+        self._get_params_transformed = et
+        self._get_param_names_transformed = en
 
         return ret
 
