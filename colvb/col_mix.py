@@ -12,7 +12,7 @@ class collapsed_mixture(col_vb):
     """
     A base class for collapsed mixture models based of the col_vb class
 
-    We inherrt from this to miuld mixtures of Gaussians, mixures of GPs etc.
+    We inherrit from this to build mixtures of Gaussians, mixures of GPs etc.
 
     This handles the mixing proportion part of the model,
     as well as providing generic functions for a merge-split approach
@@ -111,7 +111,7 @@ class collapsed_mixture(col_vb):
         if indexK is None:
             indexK = np.random.multinomial(1,self.phi_hat/self.N).argmax()
         if indexK > (self.K-1):
-            return False #index exceed no clusters
+            return False #index exceed no. clusters
         elif self.phi_hat[indexK]<1:
             return False # no data to split
 
