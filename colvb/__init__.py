@@ -3,7 +3,7 @@
 
 from MOG import MOG
 from LDA import LDA
-#from MMOG import MMOG
+from MMOG import MMOG
 from MOHGP import MOHGP
 #import bitseq
 import utilities
