@@ -29,18 +29,18 @@ class MOHGP(collapsed_mixture):
 
     def _set_params(self,x):
         """ Set the kernel parameters """
-        self.kernF._set_params_transformed(x[:kernF.Nparam])
-        self.kernY._set_params_transformed(x[kernF.Nparam:])
+        self.kernF._set_params_transformed(x[:self.kernF.Nparam])
+        self.kernY._set_params_transformed(x[self.kernF.Nparam:])
         self.do_computations()
 
     def _get_params(self):
         """ returns the kernel parameters """
-        return np.hstack([self.kernF.extract_param(), self.kernY.extract_param()])
+        return np.hstack([self.kernF._get_params_transformed(), self.kernY._get_params_transformed()])
 
-    def get_param_names(self):
+    def _get_param_names(self):
         return ['kernF_'+ n for n in self.kernF._get_param_names_transformed()] + ['kernY_' + n for n in self.kernY._get_param_names_transformed()]
 
-    def log_likelihood_gradients(self):
+    def _log_likelihood_gradients(self):
         """
         The derivative of the lower bound wrt the (kernel) parameters
         """
@@ -54,7 +54,7 @@ class MOHGP(collapsed_mixture):
         tmp += -0.5*sum(self.B_invs)
 
         #kernF_grads = np.array([np.sum(tmp*g) for g in self.kernF.extract_gradients()]) # OKAY!
-        kernF_grads = self.kernK.dK_dtheta(tmp,self.X)
+        kernF_grads = self.kernF.dK_dtheta(tmp,self.X)
 
         #gradient wrt Sigma_Y
         Byks = [np.dot(Bi,yk) for Bi,yk in zip(self.B_invs,self.ybark.T)]
@@ -66,7 +66,7 @@ class MOHGP(collapsed_mixture):
         tmp /= 2.
 
         #kernY_grads = np.array([np.sum(tmp*g) for g in self.kernY.extract_gradients()])
-        kernY_grads = self.kernK.dK_dtheta(tmp,self.X)
+        kernY_grads = self.kernY.dK_dtheta(tmp,self.X)
 
         return np.hstack((kernF_grads, kernY_grads))
 
@@ -124,11 +124,11 @@ class MOHGP(collapsed_mixture):
         """The predictive density under each component"""
         kx= self.kernF.K(self.X,Xnew)
         try:
-            kxx = self.kernF.compute_new(Xnew) + self.kernY.compute_new(Xnew)
+            kxx = self.kernF.K(Xnew) + self.kernY.K(Xnew)
         except TypeError:
             #kernY has a hierarchical structure that we should deal with
             con = np.ones((Xnew.shape[0],self.kernY.connections.shape[1]))
-            kxx = self.kernF.compute_new(Xnew) + self.kernY.compute_new(Xnew,con)
+            kxx = self.kernF.K(Xnew) + self.kernY.K(Xnew,con)
 
 
         #prediction as per my notes
@@ -170,10 +170,6 @@ class MOHGP(collapsed_mixture):
         ymin,ymax = self.Y.min(), self.Y.max()
         xmin,xmax = xmin-0.1*(xmax-xmin), xmax+0.1*(xmax-xmin)
         ymin,ymax = ymin-0.1*(ymax-ymin), ymax+0.1*(ymax-ymin)
-        #special request for qingjun. Sorry this meeses up the code, if only we had git!
-        if self.qingjun_request:
-            xmin,xmax=-8,48
-            ymin,ymax=-2.5,2.5
         xgrid = np.linspace(xmin,xmax,300)[:,None]
 
         for i,ph, mu, var in zip(range(self.K),self.phi_hat, *self.predict_components(xgrid)):
@@ -187,16 +183,11 @@ class MOHGP(collapsed_mixture):
                     col = GPy.util.plot.Tango.nextMedium()
                 else:
                     col='k'
-                if self.qingjun_request:
-                    ax.plot(self.X,self.Y[ii].T,'k',marker=None, linewidth=0.2,alpha=0.5)
-                    #col = '#cc0000'
-                    GPy.util.plot.gpplot(xgrid.flatten(),mu.flatten(),np.diag(var),col,col,axes=ax,alpha=0.1)
-                elif joined:
+                if joined:
                     ax.plot(self.X,self.Y[ii].T,col,marker=None, linewidth=0.2,alpha=1)
-                    GPy.util.plot.gpplot(xgrid.flatten(),mu.flatten(),np.diag(var),col,col,axes=ax,alpha=0.1)
                 else:
                     ax.plot(self.X,self.Y[ii].T,col,marker='.', linewidth=0.0,alpha=1)
-                    GPy.util.plot.gpplot(xgrid.flatten(),mu.flatten(),np.diag(var),col,col,axes=ax,alpha=0.1)
+                GPy.util.plot.gpplot(xgrid.flatten(),mu.flatten(),mu- 2.*np.sqrt(np.diag(var)),mu+2.*np.sqrt(np.diag(var)),col,col,axes=ax,alpha=0.1)
 
                 err = 2*np.sqrt(np.diag(self.Lambda_inv[:,:,i]))
                 if errorbars:ax.errorbar(self.X.flatten(), self.muk[:,i], yerr=err,ecolor=col, elinewidth=2, linewidth=0)
