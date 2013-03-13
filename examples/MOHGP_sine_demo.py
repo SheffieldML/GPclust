@@ -35,14 +35,13 @@ Ky2 = kern.white(1,0.01)
 Ky = Ky1 + Ky2
 m = MOHGP(X,Kf,Ky,Y, K=Nclust, prior_Z = 'DP', alpha=alpha)
 m.ensure_default_constraints()
-m.checkgrad()
-#m.checkgrad_vb()
+m.checkgrad(verbose=1)
 
 m.randomize()
 m.optimize()
 m.systematic_splits()
 m.systematic_splits()
-m.plot(1,1,1,0,1)
+m.plot(1,1,1,0,0,1)
 
 #construct model without structure
 #give it a fighting chance by normalising signals first
@@ -53,13 +52,13 @@ Kf = kern.rbf(1,0.01,0.001)
 Ky = kern.white(1,0.01)
 m2 = MOHGP(X,Kf,Ky,Y, K=Nclust, prior_Z = 'DP', alpha=alpha)
 m2.ensure_default_constraints()
-m2.checkgrad()
+m2.checkgrad(verbose=1)
 
 m2.randomize()
 m2.optimize()
 m2.systematic_splits()
 m2.systematic_splits()
-m2.plot(1,1,1,0,1)
+m2.plot(1,1,1,0,0,1)
 
 #construct a MOG model (can't recover the clusters)
 Y_ = Y.copy()
