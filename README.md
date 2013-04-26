@@ -3,10 +3,10 @@ colvb
 
 Collapsed Variational Bayes, based on the recent NIPS paper:
 
-Fast Variational Inference in the Conjugate Exponential Family
+Fast Variational Inference in the Conjugate Exponential Family  
 James Hensman, Magnus Rattray, Neil D. Lawrence
 
-http://arxiv.org/abs/1206.5162
+http://books.nips.cc/papers/files/nips25/NIPS2012_1314.pdf
 
 ***
 
@@ -23,4 +23,6 @@ col_mix contains the base class for a mixture model (MOG, MOHGP)
 
 ***
 
-This work depends on some functionality from the GPy project (https://github.com/SheffieldML/GPy). I've tested the demos with GPy v0.2.
+This work depends on some functionality from the [GPy project](https://github.com/SheffieldML/GPy).
+
+I've tested the demos with GPy v0.2.
