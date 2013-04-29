@@ -51,18 +51,25 @@ class GPRN(col_vb):
         self._computations
 
     def set_vb_param(self,param):
-        #TODO: could we use the Opper-Archabeau parameterisation? What atr the canonical/expectation parameters?
+        #TODO: could we use the Opper-Archabeau parameterisation? If so, what are the canonical/expectation parameters?
         self.q_w_canonical_flat = param.copy()
         self.q_w_precisions = -2.*self.q_w_canonical_flat[self.N*self.K:].reshape(self.K,self.N,self.N)
-        self.q_w_covarainces,self.q_w_cholinvs, self.q_w_chols, self.q_w_logdets = zip(pdinv(P) for P in self.q_w_precisions)
+        self.q_w_covariances, self.q_w_cholinvs, self.q_w_chols, self.q_w_logdets = zip(pdinv(P) for P in self.q_w_precisions)
         self.q_w_logdets = -np.array(self.q_w_logdets) # make these the log det of the covariance, not precision
-        self.q_w_means = [linalg.laplack.flapack.dpotrs(L,np.asfortranarray(X.reshape(self.N,1)),lower=1)[0].flatten() for L,X in zip(self.q_w_cholinvs,self.q_w_canonical_flat[:self.N*self.K].reshape(self.K,self.N))]
+        self.q_w_means = [linalg.laplack.flapack.dpotrs(L,np.asfortranarray(X),lower=1)[0].flatten() for L,X in zip(self.q_w_cholinvs,self.q_w_canonical_flat[:self.N*self.K].reshape(self.K,self.N,1))]
         self.q_w_expectations = [self.q_w_means, [np.dot(m,m.T) + S for m,S in zip(self.q_w_means,self.q_w_covarainces)] ]
 
     def get_vb_param(self):
         return self.q_w_canonical_flat
 
     def do_computations(self):
+        #compute and decompose all covariance matrices#
+        self.K_w = [k(self.X) for k in self.kerns_W]
+        self.K_f = [[k(self.X) for k in tmp] for tmp in self.kerns_F]
+        self.Ki_w, self.L_w, self.Li_w, self.logdet_w = zip(*[pdinv(K) for K in self.K_w])
+
+        #TODO: do we need full pdinv of the F covariances?
+
         #build the giant matrix A_tilde
         for k in range(self.K):
             for kk in range(self.K):
@@ -73,7 +80,7 @@ class GPRN(col_vb):
                     self.Atilde[i,j] += np.diag(self.q_w_covariances[k])*self.beta
 
         #construct the effective target data ytilde
-        self.Ytilde = self.Ystacked*np.hstack(self.q_w_means)[:,None]
+        self.Ytilde = self.Ystacked*np.vstack(self.q_w_means)
 
         #compute and invert posterior precision matrices (!)
         self.posterior_precisons = [self.Atilde.copy() for d in range(self.D)]
@@ -86,6 +93,13 @@ class GPRN(col_vb):
 
         #compute posterior means
         self.posterior_means = [self.beta*linalg.lapack.flapack.dpotrs(L,np.asfortranarray(y_tilde_d.reshape(self.N,1)),lower=1) for L,y_tilde_d in zip(self.posterior_choleskies,self.Ytilde.T)]
+
+        #compute intermediary derivatives
+        self.dL_dAtilde = np.zeros_like(self.A_tilde)
+        for d in range(self.D):
+            self.dL_dAtilde + -0.5*(self.posterior_covariances[d])
+            tmp = linalg.lapack.flapack.dpotrs(self.posterior_choleskies[d], self.Ytilde[:,d:d+1])
+            self.dL_dAtilde += -0.5*np.dot(tmp.tmp.T)
 
     def bound(self):
         A = -0.5*self.N*self.D*(np.log(2*np.pi) - np.log(self.beta)) + 0.5*self.N*self.Q
