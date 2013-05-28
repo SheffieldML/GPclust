@@ -17,6 +17,7 @@ class MOHGP(collapsed_mixture):
     def __init__(self, X, kernF, kernY, Y, K=2, alpha=1., prior_Z='symmetric'):
         N,self.D = Y.shape
         self.X = X
+        assert X.shape[0]==self.D, "input data don't match observations"
         self.kernF = kernF
         self.kernY = kernY
         self.Y = Y
