@@ -46,8 +46,8 @@ class LDA2(col_vb):
         self.thetabeta_sumk = self.thetabeta.sum(1) # D x V
 
         #TODO: this aint right
-        KL_alpha = np.sum((self.alphas-self.alpha_0)*logtheta) - ?
-        KL_lambda = np.sum((self.lambdas-self.lambda_0)*logbeta)
+        #KL_alpha = np.sum((self.alphas-self.alpha_0)*logtheta) - ?
+        #KL_lambda = np.sum((self.lambdas-self.lambda_0)*logbeta)
 
         self.KL = KL_alpha + KL_lambda
 

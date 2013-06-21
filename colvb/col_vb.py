@@ -7,7 +7,7 @@ import GPy
 import time
 import sys #for flushing
 
-class col_vb(GPy.core.model):
+class col_vb(GPy.core.model.Model):
     """
     A base class for collapsed variational models, using the GPy framework for
     non-variational parameters.
@@ -22,7 +22,7 @@ class col_vb(GPy.core.model):
 
     def __init__(self):
         """"""
-        GPy.core.model.__init__(self)
+        GPy.core.model.Model.__init__(self)
 
         #stuff for monitoring the different methods
         self.tracks = []
@@ -304,7 +304,7 @@ class col_vb(GPy.core.model):
         Returns the increment in the bound acheived"""
         if self._get_params().size:
             start = self.bound()
-            GPy.core.model.optimize(self,**self.hyperparam_opt_args)
+            GPy.core.model.Model.optimize(self,**self.hyperparam_opt_args)
             return self.bound()-start
 
 

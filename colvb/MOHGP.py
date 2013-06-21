@@ -30,8 +30,8 @@ class MOHGP(collapsed_mixture):
 
     def _set_params(self,x):
         """ Set the kernel parameters """
-        self.kernF._set_params_transformed(x[:self.kernF.Nparam])
-        self.kernY._set_params_transformed(x[self.kernF.Nparam:])
+        self.kernF._set_params_transformed(x[:self.kernF.num_params])
+        self.kernY._set_params_transformed(x[self.kernF.num_params:])
         self.do_computations()
 
     def _get_params(self):
