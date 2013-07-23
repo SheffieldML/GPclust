@@ -13,7 +13,7 @@ class MOG(collapsed_mixture):
     """
     A Mixture of Gaussians
     """
-    def __init__(self, X, K=2, prior_Z='symmetric', alpha=1.):
+    def __init__(self, X, K=2, prior_Z='symmetric', alpha=10.):
         self.X = X
         self.N, self.D = X.shape
 

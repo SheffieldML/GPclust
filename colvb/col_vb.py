@@ -36,7 +36,7 @@ class col_vb(GPy.core.model.Model):
                 'messages':1}
 
     def randomize(self):
-        GPy.core.model.randomize(self)
+        GPy.core.model.Model.randomize(self)
         self.set_vb_param(np.random.randn(self.get_vb_param().size))
 
     def get_vb_param(self):
