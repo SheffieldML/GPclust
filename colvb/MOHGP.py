@@ -1,13 +1,12 @@
 import numpy as np
 import pylab as pb
 from scipy import optimize, linalg
-from utilities import pdinv, softmax, multiple_pdinv, blockdiag, lngammad, ln_dirichlet_C, safe_GP_inv
 from scipy.special import gammaln, digamma
 import sys
 from col_vb import col_vb
 from col_mix import collapsed_mixture
 import GPy
-from GPy.util.linalg import mdot
+from GPy.util.linalg import mdot, pdinv
 
 class MOHGP(collapsed_mixture):
     """
@@ -87,9 +86,9 @@ class MOHGP(collapsed_mixture):
         self.Sy_hld = np.sum(np.log(np.diag(self.Sy_chol)))
         tmp = mdot(self.Sy_chol_inv,self.Sf,self.Sy_chol_inv.T)
         self.Cs = [np.eye(self.D) + tmp*phi_hat_i for phi_hat_i in self.phi_hat]
-        self.C_invs, self.hld_diff = zip(*[pdinv(C) for C in self.Cs])
+        self.C_invs, _, _, C_logdet = zip(*[pdinv(C) for C in self.Cs])
+        self.hld_diff = 0.5*np.array(C_logdet)
         self.Lambda_inv = [self.Sy/phi_hat_i - mdot(self.Sy_chol,Ci,self.Sy_chol.T)/phi_hat_i if (phi_hat_i>1e-6) else self.Sf for phi_hat_i,Ci in zip(self.phi_hat,self.C_invs)]
-        self.hld_diff = np.array(self.hld_diff)
 
         #compute posterior means
         self.muk = np.array([mdot(Li,self.Sy_inv,ybark) for Li,ybark in zip(self.Lambda_inv,self.ybark.T)]).T
