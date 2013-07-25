@@ -144,7 +144,7 @@ class MOHGP(collapsed_mixture):
         pb.plot(self.Y.T,'k',linewidth=0.5,alpha=0.4)
         pb.plot(self.muk[:,self.phi_hat>1e-3],'k',linewidth=2)
 
-    def plot(self, on_subplots=False,colour=False,newfig=True,errorbars=False,in_a_row=False,joined=True, min_in_cluster=1e-3, data_in_grey=False):
+    def plot(self, on_subplots=False,colour=False,newfig=True,errorbars=False,in_a_row=False,joined=True, min_in_cluster=1e-3, data_in_grey=False, numbered=True):
 
         assert self.X.shape[1]==1, "can only plot mixtures of 1D functions"
 
@@ -195,6 +195,10 @@ class MOHGP(collapsed_mixture):
                         ax.plot(self.X,self.Y[ii].T,col,marker='.', linewidth=0.0,alpha=1)
 
                 GPy.util.plot.gpplot(xgrid.flatten(),mu.flatten(),mu- 2.*np.sqrt(np.diag(var)),mu+2.*np.sqrt(np.diag(var)),col,col,axes=ax,alpha=0.1)
+
+                if numbered and on_subplots:
+                    ax.text(1,1,str(int(ph)),transform=ax.transAxes,ha='right',va='top',bbox={'ec':'k','lw':1.3,'fc':'w'})
+
 
                 err = 2*np.sqrt(np.diag(self.Lambda_inv[:,:,i]))
                 if errorbars:ax.errorbar(self.X.flatten(), self.muk[:,i], yerr=err,ecolor=col, elinewidth=2, linewidth=0)
