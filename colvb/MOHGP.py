@@ -145,7 +145,7 @@ class MOHGP(collapsed_mixture):
         pb.plot(self.Y.T,'k',linewidth=0.5,alpha=0.4)
         pb.plot(self.muk[:,self.phi_hat>1e-3],'k',linewidth=2)
 
-    def plot(self, on_subplots=False,colour=False,newfig=True,errorbars=False,in_a_row=False,joined=True):
+    def plot(self, on_subplots=False,colour=False,newfig=True,errorbars=False,in_a_row=False,joined=True, min_in_cluster=1e-3, data_in_grey=False):
 
         assert self.X.shape[1]==1, "can only plot mixtures of 1D functions"
 
@@ -174,7 +174,7 @@ class MOHGP(collapsed_mixture):
         xgrid = np.linspace(xmin,xmax,300)[:,None]
 
         for i,ph, mu, var in zip(range(self.K),self.phi_hat, *self.predict_components(xgrid)):
-            if ph>(1e-3):
+            if ph>(min_in_cluster):
                 ii = np.argmax(self.phi,1)==i
                 if not np.any(ii):
                     continue
@@ -185,9 +185,16 @@ class MOHGP(collapsed_mixture):
                 else:
                     col='k'
                 if joined:
-                    ax.plot(self.X,self.Y[ii].T,col,marker=None, linewidth=0.2,alpha=1)
+                    if data_in_grey:
+                        ax.plot(self.X,self.Y[ii].T,'k',marker=None, linewidth=0.2,alpha=0.4)
+                    else:
+                        ax.plot(self.X,self.Y[ii].T,col,marker=None, linewidth=0.2,alpha=1)
                 else:
-                    ax.plot(self.X,self.Y[ii].T,col,marker='.', linewidth=0.0,alpha=1)
+                    if data_in_grey:
+                        ax.plot(self.X,self.Y[ii].T,'k',marker='.', linewidth=0.0,alpha=0.4)
+                    else:
+                        ax.plot(self.X,self.Y[ii].T,col,marker='.', linewidth=0.0,alpha=1)
+
                 GPy.util.plot.gpplot(xgrid.flatten(),mu.flatten(),mu- 2.*np.sqrt(np.diag(var)),mu+2.*np.sqrt(np.diag(var)),col,col,axes=ax,alpha=0.1)
 
                 err = 2*np.sqrt(np.diag(self.Lambda_inv[:,:,i]))
