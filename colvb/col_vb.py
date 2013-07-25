@@ -32,11 +32,11 @@ class col_vb(GPy.core.model.Model):
 
         self.default_method = 'HS'
         self.hyperparam_opt_args = {
-                'max_f_eval':20,
+                'max_iters':20,
                 'messages':1}
 
     def randomize(self):
-        GPy.core.model.randomize(self)
+        GPy.core.model.Model.randomize(self)
         self.set_vb_param(np.random.randn(self.get_vb_param().size))
 
     def get_vb_param(self):
@@ -299,6 +299,7 @@ class col_vb(GPy.core.model.Model):
 
         # track:
         self.closetrack()
+
     def optimize_parameters(self):
         """ optimises the model parameters (non variational parameters)
         Returns the increment in the bound acheived"""
