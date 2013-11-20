@@ -144,7 +144,7 @@ class MOHGP(collapsed_mixture):
         pb.plot(self.Y.T,'k',linewidth=0.5,alpha=0.4)
         pb.plot(self.muk[:,self.phi_hat>1e-3],'k',linewidth=2)
 
-    def plot(self, on_subplots=False,colour=False,newfig=True,errorbars=False,in_a_row=False,joined=True, min_in_cluster=1e-3, data_in_grey=False, numbered=True):
+    def plot(self, on_subplots=False,colour=False,newfig=True,errorbars=False, in_a_row=False,joined=True, gpplot=True,min_in_cluster=1e-3, data_in_grey=False, numbered=True, data_in_duplicate=False):
 
         assert self.X.shape[1]==1, "can only plot mixtures of 1D functions"
 
@@ -154,47 +154,59 @@ class MOHGP(collapsed_mixture):
         else:
             f = pb.gcf()
         GPy.util.plot.Tango.reset()
+
+        if data_in_duplicate:
+            X = self.X[::2]
+            Y = 0.5*(self.Y[:,:-1:2] + self.Y[:,1::2])
+        else:
+            Y =self.Y
+            X = self.X
+
+        #work out how many clusters we're going to plot.
+        Ntotal = np.sum(self.phi_hat > min_in_cluster)
         if on_subplots:
             if in_a_row:
                 Nx = 1
-                Ny = self.K
+                Ny = Ntotal
             else:
-                Nx = np.floor(np.sqrt(self.K))
-                Ny = int(np.ceil(self.K/Nx))
+                Nx = np.floor(np.sqrt(Ntotal))
+                Ny = int(np.ceil(Ntotal/Nx))
                 Nx = int(Nx)
         else:
             ax = pb.gca() # this seems to make new ax if needed
 
         #limits of GPs
-        xmin,xmax = self.X.min(), self.X.max()
-        ymin,ymax = self.Y.min(), self.Y.max()
+        xmin,xmax = X.min(), X.max()
+        ymin,ymax = Y.min(), Y.max()
         xmin,xmax = xmin-0.1*(xmax-xmin), xmax+0.1*(xmax-xmin)
         ymin,ymax = ymin-0.1*(ymax-ymin), ymax+0.1*(ymax-ymin)
         xgrid = np.linspace(xmin,xmax,300)[:,None]
 
-        for i,ph, mu, var in zip(range(self.K),self.phi_hat, *self.predict_components(xgrid)):
+        subplot_count = 0
+        for i, ph, mu, var in zip(range(self.K), self.phi_hat, *self.predict_components(xgrid)):
             if ph>(min_in_cluster):
                 ii = np.argmax(self.phi,1)==i
                 if not np.any(ii):
                     continue
                 if on_subplots:
-                    ax = pb.subplot(Nx,Ny,i+1)
+                    ax = pb.subplot(Nx,Ny,subplot_count+1)
+                    subplot_count += 1
                 if colour:
                     col = GPy.util.plot.Tango.nextMedium()
                 else:
                     col='k'
                 if joined:
                     if data_in_grey:
-                        ax.plot(self.X,self.Y[ii].T,'k',marker=None, linewidth=0.2,alpha=0.4)
+                        ax.plot(X,Y[ii].T,'k',marker=None, linewidth=0.2,alpha=0.4)
                     else:
-                        ax.plot(self.X,self.Y[ii].T,col,marker=None, linewidth=0.2,alpha=1)
+                        ax.plot(X,Y[ii].T,col,marker=None, linewidth=0.2,alpha=1)
                 else:
                     if data_in_grey:
-                        ax.plot(self.X,self.Y[ii].T,'k',marker='.', linewidth=0.0,alpha=0.4)
+                        ax.plot(X,Y[ii].T,'k',marker='.', linewidth=0.0,alpha=0.4)
                     else:
-                        ax.plot(self.X,self.Y[ii].T,col,marker='.', linewidth=0.0,alpha=1)
+                        ax.plot(X,Y[ii].T,col,marker='.', linewidth=0.0,alpha=1)
 
-                GPy.util.plot.gpplot(xgrid.flatten(),mu.flatten(),mu- 2.*np.sqrt(np.diag(var)),mu+2.*np.sqrt(np.diag(var)),col,col,axes=ax,alpha=0.1)
+                if gpplot: GPy.util.plot.gpplot(xgrid.flatten(),mu.flatten(),mu- 2.*np.sqrt(np.diag(var)),mu+2.*np.sqrt(np.diag(var)),col,col,axes=ax,alpha=0.1)
 
                 if numbered and on_subplots:
                     ax.text(1,1,str(int(ph)),transform=ax.transAxes,ha='right',va='top',bbox={'ec':'k','lw':1.3,'fc':'w'})

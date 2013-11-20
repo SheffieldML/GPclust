@@ -115,6 +115,10 @@ class collapsed_mixture(col_vb):
         elif self.phi_hat[indexK]<1:
             return False # no data to split
 
+        #ensure there's something to split
+        if np.sum(self.phi[:,indexK]>threshold) <2:
+            return False
+
         bound_old = self.bound()
         phi_old = self.get_vb_param().copy()
         param_old = self._get_params_transformed()
@@ -149,10 +153,10 @@ class collapsed_mixture(col_vb):
             self.K = old_K
             self.set_vb_param(phi_old)
             self._set_params_transformed(param_old)
-            print "split failed, bound changed by: ",bound_increase
+            print "split failed, bound changed by: ",bound_increase, '(K=%s)'%self.K
             return False
         else:
-            print "split suceeded, bound changed by: ",bound_increase, ',',self.K-old_K,' new clusters'
+            print "split suceeded, bound changed by: ",bound_increase, ',',self.K-old_K,' new clusters', '(K=%s)'%self.K
             return True
 
     def systematic_splits(self):
