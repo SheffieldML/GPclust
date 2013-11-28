@@ -4,7 +4,7 @@
 import numpy as np
 #import pylab as pb
 import matplotlib as mlp
-mlp.use('cairo.pdf')
+#mlp.use('cairo.pdf')
 from scipy.special import gammaln, digamma
 from scipy import sparse
 from col_vb import col_vb

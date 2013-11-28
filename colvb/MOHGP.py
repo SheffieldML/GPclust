@@ -6,7 +6,7 @@ import sys
 from col_vb import col_vb
 from col_mix import collapsed_mixture
 import GPy
-from GPy.util.linalg import mdot, pdinv
+from GPy.util.linalg import mdot, pdinv, backsub_both_sides
 
 class MOHGP(collapsed_mixture):
     """
@@ -80,21 +80,24 @@ class MOHGP(collapsed_mixture):
         #self.Ck = np.dstack([np.dot(self.Y.T,phi[:,None]*self.Y) for phi in self.phi.T])
 
         # compute posterior variances of each cluster (lambda_inv)
-        self.Sy_chol = np.linalg.cholesky(self.Sy)
-        self.Sy_chol_inv = linalg.flapack.dtrtri(self.Sy_chol.T)[0].T
-        self.Sy_inv = np.dot(self.Sy_chol_inv.T, self.Sy_chol_inv)
-        self.Sy_hld = np.sum(np.log(np.diag(self.Sy_chol)))
-        tmp = mdot(self.Sy_chol_inv,self.Sf,self.Sy_chol_inv.T)
+        #self.Sy_chol = np.linalg.cholesky(self.Sy)
+        #self.Sy_chol_inv = linalg.flapack.dtrtri(self.Sy_chol.T)[0].T
+        #self.Sy_inv = np.dot(self.Sy_chol_inv.T, self.Sy_chol_inv)
+        #self.Sy_hld = np.sum(np.log(np.diag(self.Sy_chol)))
+        self.Sy_inv, self.Sy_chol, self.Sy_chol_inv, self.Sy_logdet = pdinv(self.Sy)
+        #tmp = mdot(self.Sy_chol_inv,self.Sf,self.Sy_chol_inv.T)
+        tmp = backsub_both_sides(self.Sy_chol, self.Sf, transpose='right')
         self.Cs = [np.eye(self.D) + tmp*phi_hat_i for phi_hat_i in self.phi_hat]
         self.C_invs, _, _, C_logdet = zip(*[pdinv(C) for C in self.Cs])
-        self.hld_diff = 0.5*np.array(C_logdet)
-        self.Lambda_inv = [self.Sy/phi_hat_i - mdot(self.Sy_chol,Ci,self.Sy_chol.T)/phi_hat_i if (phi_hat_i>1e-6) else self.Sf for phi_hat_i,Ci in zip(self.phi_hat,self.C_invs)]
+        self.log_det_diff = np.array(C_logdet)
+        self.Lambda_inv = [(self.Sy - mdot(self.Sy_chol,Ci,self.Sy_chol.T) )/phi_hat_i if (phi_hat_i>1e-6) else self.Sf for phi_hat_i,Ci in zip(self.phi_hat,self.C_invs)]
+        #self.Lambda_inv = [self.Sy/phi_hat_i - backsub_both_sides(self.Sy_chol_inv,Ci,transpose='right')/phi_hat_i if (phi_hat_i>1e-6) else self.Sf for phi_hat_i,Ci in zip(self.phi_hat,self.C_invs)]
 
         #compute posterior means
         self.muk = np.array([mdot(Li,self.Sy_inv,ybark) for Li,ybark in zip(self.Lambda_inv,self.ybark.T)]).T
 
         #useful quantities
-        self.Lambda_inv, self.hld_diff = np.dstack(self.Lambda_inv), np.array(self.hld_diff)
+        self.Lambda_inv, self.log_det_diff = np.dstack(self.Lambda_inv), np.array(self.log_det_diff)
         self.ybarkybarkT = self.ybark[:,None,:]*self.ybark[None,:,:]
         self.mukmukT = self.muk[:,None,:]*self.muk[None,:,:]
         self.Syi_ybark = np.dot(self.Sy_inv, self.ybark)
@@ -105,7 +108,7 @@ class MOHGP(collapsed_mixture):
     def bound(self):
         """Compute the lower bound on the marginal likelihood (conditioned on the GP hyper parameters). """
         #return -0.5*self.N*self.D*np.log(2.*np.pi) -self.hld_diff.sum() - self.N*self.Sy_hld -0.5*np.sum(self.Ck*self.Sy_inv[:,:,None])\
-        return -0.5*self.N*self.D*np.log(2.*np.pi) -self.hld_diff.sum() - self.N*self.Sy_hld -0.5*np.sum(self.YTY*self.Sy_inv)\
+        return -0.5*(self.N*self.D*np.log(2.*np.pi) + self.log_det_diff.sum() + self.N*self.Sy_logdet + np.sum(self.YTY*self.Sy_inv))\
             + 0.5*np.sum(self.Syi_ybarkybarkT_Syi*self.Lambda_inv)\
             + self.mixing_prop_bound() + self.H
 
@@ -113,7 +116,7 @@ class MOHGP(collapsed_mixture):
         """Gradients of the bound"""
         yn_mk = self.Y[:,:,None]-self.muk[None,:,:]
         ynmk2 = np.sum(np.dot(self.Sy_inv,yn_mk)*np.rollaxis(yn_mk,0,2),0)
-        grad_phi = self.mixing_prop_bound_grad() - 0.5*np.sum(np.sum(self.Lambda_inv*self.Sy_inv[:,:,None],0),0) -0.5*ynmk2 +self.Hgrad
+        grad_phi = self.mixing_prop_bound_grad() - 0.5*np.sum(np.sum(self.Lambda_inv*self.Sy_inv[:,:,None],0),0) -0.5*ynmk2 + self.Hgrad
         natgrad = grad_phi - np.sum(self.phi*grad_phi,1)[:,None]
         grad = natgrad*self.phi
 
