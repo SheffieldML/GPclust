@@ -7,8 +7,8 @@ np.random.seed(1)
 pb.close('all')
 
 #cool structed GP demo
-Nclust = 6
-Nx = 10
+Nclust = 10
+Nx = 5
 Nobs = [np.random.randint(20,30) for i in range(Nclust)]
 X = np.random.rand(Nx,1)*5
 X.sort(0)
@@ -30,7 +30,7 @@ m.preferred_optimizer='bfgs'
 m.systematic_splits()
 m.remove_empty_clusters(1e-3)
 m.plot(1,1,1,0,0,1)
-raw_input('press any key...')
+raw_input('press enter to continue ...')
 
 #and again without structure
 Y -= Y.mean(1)[:,None]
