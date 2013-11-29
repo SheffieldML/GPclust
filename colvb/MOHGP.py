@@ -7,6 +7,7 @@ from col_vb import col_vb
 from col_mix import collapsed_mixture
 import GPy
 from GPy.util.linalg import mdot, pdinv, backsub_both_sides, dpotrs, jitchol, dtrtrs
+from scipy import weave
 
 class MOHGP(collapsed_mixture):
     """
@@ -15,11 +16,17 @@ class MOHGP(collapsed_mixture):
     """
     def __init__(self, X, kernF, kernY, Y, K=2, alpha=1., prior_Z='symmetric'):
         N,self.D = Y.shape
+        self.Y = Y
         self.X = X
         assert X.shape[0]==self.D, "input data don't match observations"
+
+        #initialize kernels
         self.kernF = kernF
         self.kernY = kernY
-        self.Y = Y
+        self.Sf = self.kernF.K(self.X)
+        self.Sy = self.kernY.K(self.X)
+        self.Sy_inv, self.Sy_chol, self.Sy_chol_inv, self.Sy_logdet = pdinv(self.Sy)
+
 
         #Computations that can be done outside the optimisation loop
         self.YYT = self.Y[:,:,np.newaxis]*self.Y[:,np.newaxis,:]
@@ -28,9 +35,17 @@ class MOHGP(collapsed_mixture):
         collapsed_mixture.__init__(self, N, K, prior_Z, alpha)
 
     def _set_params(self,x):
-        """ Set the kernel parameters """
+        """ Set the kernel parameters. Note that the variational parameters are handled separately."""
+        #st the kernels with their parameters
         self.kernF._set_params_transformed(x[:self.kernF.num_params])
         self.kernY._set_params_transformed(x[self.kernF.num_params:])
+
+        #get the latest kernel matrices, decompose
+        self.Sf = self.kernF.K(self.X)
+        self.Sy = self.kernY.K(self.X)
+        self.Sy_inv, self.Sy_chol, self.Sy_chol_inv, self.Sy_logdet = pdinv(self.Sy)
+
+        #update everything
         self.do_computations()
 
     def _get_params(self):
@@ -75,21 +90,16 @@ class MOHGP(collapsed_mixture):
         return np.hstack((kernF_grads, kernY_grads))
 
     def do_computations(self):
-        #get the latest kernel matrices
-        self.Sf = self.kernF.K(self.X)
-        self.Sy = self.kernY.K(self.X)
-
+        """
+        Here we do all the computations that are required whenever the kernels or the varaitional parameters are changed
+        """
         #sufficient stats. speed bottleneck?
         self.ybark = np.dot(self.phi.T,self.Y).T
         #self.Ck = np.dstack([np.dot(self.Y.T,phi[:,None]*self.Y) for phi in self.phi.T])
 
         # compute posterior variances of each cluster (lambda_inv)
-        self.Sy_inv, self.Sy_chol, self.Sy_chol_inv, self.Sy_logdet = pdinv(self.Sy)
         tmp = backsub_both_sides(self.Sy_chol, self.Sf, transpose='right')
         self.Cs = [np.eye(self.D) + tmp*phi_hat_i for phi_hat_i in self.phi_hat]
-        #self.C_invs, _, _, C_logdet = zip(*[pdinv(C) for C in self.Cs])
-        #self.log_det_diff = np.array(C_logdet)
-        #self.Lambda_inv = np.array([( self.Sy - mdot(self.Sy_chol,Ci,self.Sy_chol.T) )/phi_hat_i if (phi_hat_i>1e-6) else self.Sf for phi_hat_i, Ci in zip(self.phi_hat, self.C_invs)])
 
         self._C_chols = [jitchol(C) for C in self.Cs]
         self.log_det_diff = np.array([2.*np.sum(np.log(np.diag(L))) for L in self._C_chols])
@@ -110,7 +120,9 @@ class MOHGP(collapsed_mixture):
     def vb_grad_natgrad(self):
         """Gradients of the bound"""
         yn_mk = self.Y[:,:,None]-self.muk[None,:,:]
-        ynmk2 = np.sum(np.dot(self.Sy_inv,yn_mk)*np.rollaxis(yn_mk,0,2),0)
+        #ynmk2 = np.sum(np.dot(self.Sy_inv,yn_mk)*np.rollaxis(yn_mk,0,2),0)
+        ynmk2 = multiple_mahalanobis(yn_mk, self.Sy_chol)
+
         grad_phi = (self.mixing_prop_bound_grad() -
                     0.5*np.sum(np.sum(self.Lambda_inv*self.Sy_inv[None,:,:],1),1)) + \
                    ( self.Hgrad - 0.5*ynmk2 ) # parentheses are for operation ordering!
@@ -188,6 +200,7 @@ class MOHGP(collapsed_mixture):
         for i, ph, mu, var in zip(range(self.K), self.phi_hat, *self.predict_components(xgrid)):
             if ph>(min_in_cluster):
                 ii = np.argmax(self.phi,1)==i
+                num_in_clust = np.sum(ii)
                 if not np.any(ii):
                     continue
                 if on_subplots:
@@ -211,8 +224,7 @@ class MOHGP(collapsed_mixture):
                 if gpplot: GPy.util.plot.gpplot(xgrid.flatten(),mu.flatten(),mu- 2.*np.sqrt(np.diag(var)),mu+2.*np.sqrt(np.diag(var)),col,col,axes=ax,alpha=0.1)
 
                 if numbered and on_subplots:
-                    ax.text(1,1,str(int(ph)),transform=ax.transAxes,ha='right',va='top',bbox={'ec':'k','lw':1.3,'fc':'w'})
-
+                    ax.text(1,1,str(int(num_in_clust)),transform=ax.transAxes,ha='right',va='top',bbox={'ec':'k','lw':1.3,'fc':'w'})
 
                 err = 2*np.sqrt(np.diag(self.Lambda_inv[i,:,:]))
                 if errorbars:ax.errorbar(self.X.flatten(), self.muk[:,i], yerr=err,ecolor=col, elinewidth=2, linewidth=0)
@@ -221,5 +233,44 @@ class MOHGP(collapsed_mixture):
             GPy.util.plot.align_subplots(Nx,Ny,xlim=(xmin,xmax))
         else:
             ax.set_xlim(xmin,xmax)
+
+def multiple_mahalanobis(A,L):
+    """
+    A is a N x D x K array
+    L is a D x D array, lower triangular
+
+    compute a_nk.T * (L * L.T)^-1 * a_nk
+
+    for each of the NxK D_vectors a_nk
+
+    """
+    N,D,K = A.shape
+    assert L.shape == (D,D)
+    result = np.zeros(shape=(N,K), dtype=np.float64)
+    tmp = np.empty(D)
+
+    code = """
+    //two loops over the NxK vectors
+    for(int n=0; n<N; n++){
+      for(int k=0; k<K; k++){
+
+        //a double loop to solve the cholesy problem into tmp (should really use blas?)
+        for(int i=0; i<D; i++){
+          tmp(i) = A(n, i, k);
+          for(int j=0; j<i; j++){
+            tmp(i) -= L(i,j)*tmp(j);
+          }
+          tmp(i) /= L(i,i);
+        }
+
+        //loop over tmp to get the result: tmp.T * tmp
+        for(int i=0; i<D; i++){
+          result(n,k) += tmp(i)*tmp(i);
+        }
+      }
+    }
+    """
+    weave.inline(code, arg_names=["A", "L", "N", "D", "K", "result", "tmp"], type_converters=weave.converters.blitz)
+    return result
 
 
