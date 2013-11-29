@@ -6,7 +6,7 @@ import sys
 from col_vb import col_vb
 from col_mix import collapsed_mixture
 import GPy
-from GPy.util.linalg import mdot, pdinv, backsub_both_sides, dpotrs
+from GPy.util.linalg import mdot, pdinv, backsub_both_sides, dpotrs, jitchol, dtrtrs
 
 class MOHGP(collapsed_mixture):
     """
@@ -45,7 +45,9 @@ class MOHGP(collapsed_mixture):
         The derivative of the lower bound wrt the (kernel) parameters
         """
 
-        B_invs = [phi_hat_i*mdot(self.Sy_chol_inv.T,Ci,self.Sy_chol_inv) for phi_hat_i, Ci in zip(self.phi_hat,self.C_invs)]
+        tmp = [dtrtrs(L, self.Sy_chol_inv, lower=1)[0] for L in self._C_chols]
+        B_invs = [phi_hat_i*np.dot(tmp_i.T, tmp_i) for phi_hat_i, tmp_i in zip(self.phi_hat, tmp)]
+        #B_invs = [phi_hat_i*mdot(self.Sy_chol_inv.T,Ci,self.Sy_chol_inv) for phi_hat_i, Ci in zip(self.phi_hat,self.C_invs)]
 
         #heres the mukmukT*Lambda term
         LiSfi = [np.eye(self.D)-np.dot(self.Sf,Bi) for Bi in B_invs]#seems okay
@@ -85,9 +87,14 @@ class MOHGP(collapsed_mixture):
         self.Sy_inv, self.Sy_chol, self.Sy_chol_inv, self.Sy_logdet = pdinv(self.Sy)
         tmp = backsub_both_sides(self.Sy_chol, self.Sf, transpose='right')
         self.Cs = [np.eye(self.D) + tmp*phi_hat_i for phi_hat_i in self.phi_hat]
-        self.C_invs, _, _, C_logdet = zip(*[pdinv(C) for C in self.Cs])
-        self.log_det_diff = np.array(C_logdet)
-        self.Lambda_inv = np.array([( self.Sy - mdot(self.Sy_chol,Ci,self.Sy_chol.T) )/phi_hat_i if (phi_hat_i>1e-6) else self.Sf for phi_hat_i, Ci in zip(self.phi_hat, self.C_invs)])
+        #self.C_invs, _, _, C_logdet = zip(*[pdinv(C) for C in self.Cs])
+        #self.log_det_diff = np.array(C_logdet)
+        #self.Lambda_inv = np.array([( self.Sy - mdot(self.Sy_chol,Ci,self.Sy_chol.T) )/phi_hat_i if (phi_hat_i>1e-6) else self.Sf for phi_hat_i, Ci in zip(self.phi_hat, self.C_invs)])
+
+        self._C_chols = [jitchol(C) for C in self.Cs]
+        self.log_det_diff = np.array([2.*np.sum(np.log(np.diag(L))) for L in self._C_chols])
+        tmp = [dtrtrs(L, self.Sy_chol.T, lower=1)[0] for L in self._C_chols]
+        self.Lambda_inv = np.array([( self.Sy - np.dot(tmp_i.T, tmp_i) )/phi_hat_i if (phi_hat_i>1e-6) else self.Sf for phi_hat_i, tmp_i in zip(self.phi_hat, tmp)])
 
         #posterior mean and other useful quantities
         self.Syi_ybark, _ = dpotrs(self.Sy_chol, self.ybark, lower=1)
@@ -116,7 +123,8 @@ class MOHGP(collapsed_mixture):
     def predict_components(self,Xnew):
         """The predictive density under each component"""
 
-        B_invs = [phi_hat_i*mdot(self.Sy_chol_inv.T,Ci,self.Sy_chol_inv) for phi_hat_i, Ci in zip(self.phi_hat,self.C_invs)]
+        tmp = [dtrtrs(L, self.Sy_chol_inv, lower=1)[0] for L in self._C_chols]
+        B_invs = [phi_hat_i*np.dot(tmp_i.T, tmp_i) for phi_hat_i, tmp_i in zip(self.phi_hat, tmp)]
         kx= self.kernF.K(self.X,Xnew)
         try:
             kxx = self.kernF.K(Xnew) + self.kernY.K(Xnew)
