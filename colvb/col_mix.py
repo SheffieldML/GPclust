@@ -144,7 +144,6 @@ class collapsed_mixture(col_vb):
 
 
         self.optimize(maxiter=100)
-        self.reorder()
         self.remove_empty_clusters()
         bound_new = self.bound()
 
