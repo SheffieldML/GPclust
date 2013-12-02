@@ -7,8 +7,8 @@ np.random.seed(1)
 pb.close('all')
 
 #cool structed GP demo
-Nclust = 50
-Nx = 20
+Nclust = 20
+Nx = 12
 Nobs = [np.random.randint(20,21) for i in range(Nclust)]
 X = np.random.rand(Nx,1)*5
 X.sort(0)

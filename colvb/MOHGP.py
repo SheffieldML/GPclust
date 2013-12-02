@@ -119,9 +119,9 @@ class MOHGP(collapsed_mixture):
 
     def vb_grad_natgrad(self):
         """Gradients of the bound"""
-        yn_mk = self.Y[:,:,None]-self.muk[None,:,:]
+        #yn_mk = self.Y[:,:,None]-self.muk[None,:,:]
         #ynmk2 = np.sum(np.dot(self.Sy_inv,yn_mk)*np.rollaxis(yn_mk,0,2),0)
-        ynmk2 = multiple_mahalanobis(yn_mk, self.Sy_chol)
+        ynmk2 = multiple_mahalanobis(self.Y, self.muk.T, self.Sy_chol)
 
         grad_phi = (self.mixing_prop_bound_grad() -
                     0.5*np.sum(np.sum(self.Lambda_inv*self.Sy_inv[None,:,:],1),1)) + \
@@ -233,22 +233,22 @@ class MOHGP(collapsed_mixture):
             GPy.util.plot.align_subplots(Nx,Ny,xlim=(xmin,xmax))
         else:
             ax.set_xlim(xmin,xmax)
-
-def multiple_mahalanobis(A,L):
+def multiple_mahalanobis(X1, X2, L):
     """
-    A is a N x D x K array
+    X1 is a N1 x D array
+    X2 is a N2 x D array
     L is a D x D array, lower triangular
 
-    compute a_nk.T * (L * L.T)^-1 * a_nk
+    compute (x1_n - x2_m).T * (L * L.T)^-1 * (x1_n - x2_m)
 
-    for each of the NxK D_vectors a_nk
+    for each pair of the D_vectors x1_n, x2_m
 
-    Returns: a N x K array of each distance
+    Returns: a N1 x N2 array of each distance
     """
-    N,D,K = A.shape
+    N1,D = X1.shape
+    N2,D = X2.shape
     assert L.shape == (D,D)
-    result = np.zeros(shape=(N,K), dtype=np.float64)
-    #tmp = np.empty(D)
+    result = np.zeros(shape=(N1,N2), dtype=np.float64)
 
     #configure weave for parallel (or not)
     weave_options_openmp = {'headers'           : ['<omp.h>'],
@@ -268,21 +268,21 @@ def multiple_mahalanobis(A,L):
         weave_support_code = "#include <math.h>"
 
     if GPy.util.config.config.getboolean('parallel', 'openmp'):
-        pragma_string = '#pragma omp parallel for private(tmp, n, k, i, j)'
+        pragma_string = '#pragma omp parallel for private(n,m,i,j,tmp)'
     else:
         pragma_string = ''
 
     code = """
     double tmp [D];
-    //two loops over the NxK vectors
-    int n, k, i, j;
-    {i}
-    for(n=0; n<N; n++){{
-      for(k=0; k<K; k++){{
+    //two loops over the N1 x N2 vectors
+    int n, m, i, j;
+    {pragma}
+    for(n=0; n<N1; n++){{
+      for(m=0; m<N2; m++){{
 
         //a double loop to solve the cholesy problem into tmp (should really use blas?)
         for(i=0; i<D; i++){{
-          tmp[i] = A(n, i, k);
+          tmp[i] = X1(n,i) - X2(m,i);
           for(j=0; j<i; j++){{
             tmp[i] -= L(i,j)*tmp[j];
           }}
@@ -291,12 +291,12 @@ def multiple_mahalanobis(A,L):
 
         //loop over tmp to get the result: tmp.T * tmp (should really use blas again)
         for(i=0; i<D; i++){{
-          result(n,k) += tmp[i]*tmp[i];
+          result(n,m) += tmp[i]*tmp[i];
         }}
       }}
     }}
-    """.format(i=pragma_string)
-    weave.inline(code, arg_names=["A", "L", "N", "D", "K", "result"], type_converters=weave.converters.blitz, support_code=weave_support_code, **weave_options)
+    """.format(pragma=pragma_string)
+    weave.inline(code, arg_names=["X1", "X2", "L", "N1", "N2", "D", "result"], type_converters=weave.converters.blitz, support_code=weave_support_code, **weave_options)
     return result
 
 
