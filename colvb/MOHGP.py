@@ -243,34 +243,59 @@ def multiple_mahalanobis(A,L):
 
     for each of the NxK D_vectors a_nk
 
+    Returns: a N x K array of each distance
     """
     N,D,K = A.shape
     assert L.shape == (D,D)
     result = np.zeros(shape=(N,K), dtype=np.float64)
     tmp = np.empty(D)
 
+    #configure weave for parallel (or not)
+    weave_options_openmp = {'headers'           : ['<omp.h>'],
+                            'extra_compile_args': ['-fopenmp -O3'],
+                            'extra_link_args'   : ['-lgomp'],
+                            'libraries': ['gomp']}
+    weave_options_noopenmp = {'extra_compile_args': ['-O3']}
+
+    if GPy.util.config.config.getboolean('parallel', 'openmp'):
+        weave_options = weave_options_openmp
+        weave_support_code =  """
+        #include <omp.h>
+        #include <math.h>
+        """
+    else:
+        weave_options = weave_options_noopenmp
+        weave_support_code = "#include <math.h>"
+
+    if GPy.util.config.config.getboolean('parallel', 'openmp'):
+        pragma_string = '#pragma omp parallel for private(n, k, i, j)'
+    else:
+        pragma_string = ''
+
     code = """
     //two loops over the NxK vectors
-    for(int n=0; n<N; n++){
-      for(int k=0; k<K; k++){
+    int n, k, i, j;
+    %s
+    for(n=0; n<N; n++){
+      for(k=0; k<K; k++){
 
         //a double loop to solve the cholesy problem into tmp (should really use blas?)
-        for(int i=0; i<D; i++){
+        for(i=0; i<D; i++){
           tmp(i) = A(n, i, k);
-          for(int j=0; j<i; j++){
+          for(j=0; j<i; j++){
             tmp(i) -= L(i,j)*tmp(j);
           }
           tmp(i) /= L(i,i);
         }
 
-        //loop over tmp to get the result: tmp.T * tmp
-        for(int i=0; i<D; i++){
+        //loop over tmp to get the result: tmp.T * tmp (should really use blas again)
+        for(i=0; i<D; i++){
           result(n,k) += tmp(i)*tmp(i);
         }
       }
     }
-    """
-    weave.inline(code, arg_names=["A", "L", "N", "D", "K", "result", "tmp"], type_converters=weave.converters.blitz)
+    """%pragma_string
+    weave.inline(code, arg_names=["A", "L", "N", "D", "K", "result", "tmp"], type_converters=weave.converters.blitz, support_code=weave_support_code, **weave_options)
     return result
 
 
