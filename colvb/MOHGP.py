@@ -248,7 +248,7 @@ def multiple_mahalanobis(A,L):
     N,D,K = A.shape
     assert L.shape == (D,D)
     result = np.zeros(shape=(N,K), dtype=np.float64)
-    tmp = np.empty(D)
+    #tmp = np.empty(D)
 
     #configure weave for parallel (or not)
     weave_options_openmp = {'headers'           : ['<omp.h>'],
@@ -268,34 +268,35 @@ def multiple_mahalanobis(A,L):
         weave_support_code = "#include <math.h>"
 
     if GPy.util.config.config.getboolean('parallel', 'openmp'):
-        pragma_string = '#pragma omp parallel for private(n, k, i, j)'
+        pragma_string = '#pragma omp parallel for private(tmp, n, k, i, j)'
     else:
         pragma_string = ''
 
     code = """
+    double tmp [D];
     //two loops over the NxK vectors
     int n, k, i, j;
-    %s
-    for(n=0; n<N; n++){
-      for(k=0; k<K; k++){
+    {i}
+    for(n=0; n<N; n++){{
+      for(k=0; k<K; k++){{
 
         //a double loop to solve the cholesy problem into tmp (should really use blas?)
-        for(i=0; i<D; i++){
-          tmp(i) = A(n, i, k);
-          for(j=0; j<i; j++){
-            tmp(i) -= L(i,j)*tmp(j);
-          }
-          tmp(i) /= L(i,i);
-        }
+        for(i=0; i<D; i++){{
+          tmp[i] = A(n, i, k);
+          for(j=0; j<i; j++){{
+            tmp[i] -= L(i,j)*tmp[j];
+          }}
+          tmp[i] /= L(i,i);
+        }}
 
         //loop over tmp to get the result: tmp.T * tmp (should really use blas again)
-        for(i=0; i<D; i++){
-          result(n,k) += tmp(i)*tmp(i);
-        }
-      }
-    }
-    """%pragma_string
-    weave.inline(code, arg_names=["A", "L", "N", "D", "K", "result", "tmp"], type_converters=weave.converters.blitz, support_code=weave_support_code, **weave_options)
+        for(i=0; i<D; i++){{
+          result(n,k) += tmp[i]*tmp[i];
+        }}
+      }}
+    }}
+    """.format(i=pragma_string)
+    weave.inline(code, arg_names=["A", "L", "N", "D", "K", "result"], type_converters=weave.converters.blitz, support_code=weave_support_code, **weave_options)
     return result
 
 
