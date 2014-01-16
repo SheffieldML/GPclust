@@ -4,7 +4,7 @@
 import numpy as np
 import pylab as pb
 from scipy import optimize, linalg
-from utilities import pdinv, softmax, multiple_pdinv, blockdiag, lngammad, ln_dirichlet_C, safe_GP_inv
+from utilities import softmax, ln_dirichlet_C, softmax_weave
 from scipy.special import gammaln, digamma
 from col_vb import col_vb
 
@@ -38,10 +38,8 @@ class collapsed_mixture(col_vb):
     def set_vb_param(self,phi_):
         #unflatten and softmax
         self.phi_ = phi_.reshape(self.N,self.K)
-        self.phi = softmax(self.phi_)
+        self.phi, logphi, self.H = softmax_weave(self.phi_)
         self.phi_hat = self.phi.sum(0)
-        logphi = np.log(np.clip(self.phi,1e-10,1.))
-        self.H = -np.sum(self.phi*logphi) # entropy
         self.Hgrad = -logphi
         if self.prior_Z=='DP':
             self.phi_tilde_plus_hat = self.phi_hat[::-1].cumsum()[::-1]
@@ -119,6 +117,8 @@ class collapsed_mixture(col_vb):
         if np.sum(self.phi[:,indexK]>threshold) <2:
             return False
 
+        print "\nattempting to split cluster ", indexK
+
         bound_old = self.bound()
         phi_old = self.get_vb_param().copy()
         param_old = self._get_params_transformed()
@@ -143,8 +143,7 @@ class collapsed_mixture(col_vb):
         self.set_vb_param(self.get_vb_param())
 
 
-        self.optimize()
-        self.reorder()
+        self.optimize(maxiter=100)
         self.remove_empty_clusters()
         bound_new = self.bound()
 
@@ -157,6 +156,8 @@ class collapsed_mixture(col_vb):
             return False
         else:
             print "split suceeded, bound changed by: ",bound_increase, ',',self.K-old_K,' new clusters', '(K=%s)'%self.K
+            print "optimizing new split to convergence:"
+            self.optimize(maxiter=5000)
             return True
 
     def systematic_splits(self):

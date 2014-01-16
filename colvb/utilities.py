@@ -2,8 +2,9 @@
 # Licensed under the GPL v3 (see LICENSE.txt)
 
 import numpy as np
-from scipy import linalg, special, sparse
+from scipy import linalg, special, sparse, weave
 import sys # for flushing
+import GPy
 
 def safe_GP_inv(K,w):
     """
@@ -114,6 +115,86 @@ def multiple_pdinv(A):
 def softmax(x):
     ex = np.exp(x-x.max(1)[:,None])
     return ex/ex.sum(1)[:,np.newaxis]
+
+def softmax_weave(X):
+    """
+    use weave to compute the softmax of the (rows of) matrix X. 
+
+    uses omp to parallelise the loop
+
+    also returns the log of the softmaxed result
+    """
+
+    #configure weave for parallel (or not)
+    weave_options_openmp = {'headers'           : ['<omp.h>'],
+                            'extra_compile_args': ['-fopenmp -O3'],
+                            'extra_link_args'   : ['-lgomp'],
+                            'libraries': ['gomp']}
+    weave_options_noopenmp = {'extra_compile_args': ['-O3']}
+
+    if GPy.util.config.config.getboolean('parallel', 'openmp'):
+        weave_options = weave_options_openmp
+        weave_support_code =  """
+        #include <omp.h>
+        #include <math.h>
+        """
+    else:
+        weave_options = weave_options_noopenmp
+        weave_support_code = "#include <math.h>"
+
+    if GPy.util.config.config.getboolean('parallel', 'openmp'):
+        pragma_string = '#pragma omp parallel for private(i, j, max_x, norm, log_norm, entropy)'
+    else:
+        pragma_string = ''
+
+    N,D = X.shape
+    phi = np.zeros_like(X)
+    log_phi = X.copy()
+    code = """
+    int i, j;
+    double max_x, norm, log_norm, entropy;
+    double entropy_i [N];
+    {pragma}
+    for(i=0;i<N;i++){{
+
+      //find the maximum element
+      max_x = X(i,0);
+      for(j=1;j<D;j++){{
+        if (X(i,j)>max_x){{
+          max_x = X(i,j);
+        }}
+      }}
+
+      //compute un-normalised phi, normaliser
+      norm = 0.0;
+      for(j=0;j<D;j++){{
+        log_phi(i,j) -= max_x;
+        phi(i,j) = exp(log_phi(i,j));
+        norm += phi(i,j);
+      }}
+      log_norm = log(norm);
+
+      //normalise, compute entropy
+      entropy_i[i] = 0.0;
+      for(j=0;j<D;j++){{
+        phi(i,j) /= norm;
+        log_phi(i,j) -= log_norm;
+        entropy_i[i] -= phi(i,j)*log_phi(i,j);
+      }}
+    }}
+
+    //sum entropies for each variable
+    entropy = 0.0;
+    for(i=0;i<N;i++){{
+      entropy += entropy_i[i];
+    }}
+
+    return_val = entropy;
+
+    """.format(pragma=pragma_string)
+
+    H = weave.inline(code, arg_names=["X", "phi", "log_phi", "N", "D"], type_converters=weave.converters.blitz, support_code=weave_support_code, **weave_options)
+    return phi, log_phi, H
 
 def single_softmax(x):
     ex = np.exp(x)
