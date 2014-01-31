@@ -158,9 +158,12 @@ class MOHGP(collapsed_mixture):
         pb.plot(self.Y.T,'k',linewidth=0.5,alpha=0.4)
         pb.plot(self.muk[:,self.phi_hat>1e-3],'k',linewidth=2)
 
-    def plot(self, on_subplots=False,colour=False,newfig=True,errorbars=False, in_a_row=False,joined=True, gpplot=True,min_in_cluster=1e-3, data_in_grey=False, numbered=True, data_in_duplicate=False):
+    def plot(self, on_subplots=False,colour=False,newfig=True,errorbars=False, in_a_row=False,joined=True, gpplot=True,min_in_cluster=1e-3, data_in_grey=False, numbered=True, data_in_duplicate=False, fixed_inputs=[]):
 
-        assert self.X.shape[1]==1, "can only plot mixtures of 1D functions"
+        #work out what input dimensions to plot
+        fixed_dims = np.array([i for i,v in fixed_inputs])
+        free_dims = np.setdiff1d(np.arange(self.X.shape[1]),fixed_dims)
+        assert len(free_dims)==1, "can only plot mixtures of 1D functions"
 
         #figure, subplots
         if newfig:
@@ -170,11 +173,11 @@ class MOHGP(collapsed_mixture):
         GPy.util.plot.Tango.reset()
 
         if data_in_duplicate:
-            X = self.X[::2]
+            X = self.X[::2, free_dims]
             Y = 0.5*(self.Y[:,:-1:2] + self.Y[:,1::2])
         else:
-            Y =self.Y
-            X = self.X
+            Y = self.Y
+            X = self.X[:,free_dims]
 
         #work out how many clusters we're going to plot.
         Ntotal = np.sum(self.phi_hat > min_in_cluster)
@@ -194,10 +197,14 @@ class MOHGP(collapsed_mixture):
         ymin,ymax = Y.min(), Y.max()
         xmin,xmax = xmin-0.1*(xmax-xmin), xmax+0.1*(xmax-xmin)
         ymin,ymax = ymin-0.1*(ymax-ymin), ymax+0.1*(ymax-ymin)
-        xgrid = np.linspace(xmin,xmax,300)[:,None]
+        Xgrid = np.empty((300,self.X.shape[1]))
+        Xgrid[:,free_dims] = np.linspace(xmin,xmax,300)[:,None]
+        for i,v in fixed_inputs:
+            Xgrid[:,i] = v
+
 
         subplot_count = 0
-        for i, ph, mu, var in zip(range(self.K), self.phi_hat, *self.predict_components(xgrid)):
+        for i, ph, mu, var in zip(range(self.K), self.phi_hat, *self.predict_components(Xgrid)):
             if ph>(min_in_cluster):
                 ii = np.argmax(self.phi,1)==i
                 num_in_clust = np.sum(ii)
@@ -221,7 +228,7 @@ class MOHGP(collapsed_mixture):
                     else:
                         ax.plot(X,Y[ii].T,col,marker='.', linewidth=0.0,alpha=1)
 
-                if gpplot: GPy.util.plot.gpplot(xgrid.flatten(),mu.flatten(),mu- 2.*np.sqrt(np.diag(var)),mu+2.*np.sqrt(np.diag(var)),col,col,axes=ax,alpha=0.1)
+                if gpplot: GPy.util.plot.gpplot(Xgrid[:,free_dims].flatten(),mu.flatten(),mu- 2.*np.sqrt(np.diag(var)),mu+2.*np.sqrt(np.diag(var)),col,col,axes=ax,alpha=0.1)
 
                 if numbered and on_subplots:
                     ax.text(1,1,str(int(num_in_clust)),transform=ax.transAxes,ha='right',va='top',bbox={'ec':'k','lw':1.3,'fc':'w'})

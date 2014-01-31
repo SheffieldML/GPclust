@@ -21,6 +21,8 @@ def cart_to_spherical(x,y,z):
 tt, pp = np.linspace(0,2,100), np.linspace(0,2,100)
 fig_flat = pb.figure()
 pb.plot(tt,pp,linewidth=2)
+pb.xlabel('lattitude')
+pb.ylabel('longitude')
 fig_s = pb.figure()
 ax = fig_s.add_subplot(111, projection='3d')
 ax.plot(*spherical_to_cart(tt,pp,1.),linewidth=2)
