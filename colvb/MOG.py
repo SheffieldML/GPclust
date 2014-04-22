@@ -4,7 +4,7 @@
 import numpy as np
 import pylab as pb
 from scipy import optimize, linalg
-from utilities import pdinv, softmax, multiple_pdinv, blockdiag, lngammad, ln_dirichlet_C, safe_GP_inv
+from utilities import softmax, multiple_pdinv, lngammad, ln_dirichlet_C
 from scipy.special import gammaln, digamma
 from scipy import stats
 from col_mix import collapsed_mixture
