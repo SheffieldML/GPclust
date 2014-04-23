@@ -1,13 +1,11 @@
 # Copyright (c) 2012 James Hensman
 # Licensed under the GPL v3 (see LICENSE.txt)
-
 import numpy as np
-import pylab as pb
 import GPy
 import time
 import sys #for flushing
 
-class col_vb(GPy.core.model.Model):
+class col_vb(GPy.core.Model):
     """
     A base class for collapsed variational models, using the GPy framework for
     non-variational parameters.
@@ -20,9 +18,9 @@ class col_vb(GPy.core.model.Model):
     providing the optimisation routine, and methods for tracking the optimisation
     """
 
-    def __init__(self):
+    def __init__(self, name):
         """"""
-        GPy.core.model.Model.__init__(self)
+        GPy.core.Model.__init__(self, name)
 
         #stuff for monitoring the different methods
         self.tracks = []
@@ -36,18 +34,21 @@ class col_vb(GPy.core.model.Model):
                 'messages':1}
 
     def randomize(self):
-        GPy.core.model.Model.randomize(self)
+        GPy.core.Model.randomize(self)
         self.set_vb_param(np.random.randn(self.get_vb_param().size))
 
     def get_vb_param(self):
         """Return a vector of variational parameters"""
         raise NotImplementedError
+
     def set_vb_param(self,x):
         """Expand a vector of variational parameters into the model"""
         raise NotImplementedError
+
     def bound(self):
         """Returns the lower bound on the marginal likelihood"""
         raise NotImplementedError
+
     def vb_grad_natgrad(self):
         """Returns the gradient and natural gradient of the variational parameters"""
 
@@ -55,31 +56,27 @@ class col_vb(GPy.core.model.Model):
         """In optimising the non variational (e.g. kernel) parameters, use the
         bound as a proxy for the likelihood"""
         return self.bound()
+
     def log_likelihood_gradients(self):
         """ Returns the gradient of the bound w.r.t. the non-variational parameters"""
         raise NotImplementedError
-    def _set_params(self,x):
-        """
-        Set the non-variational parameters.
-        Here we assume that there are no parameters...
-        """
-        pass
-    def _get_params(self):
-        """Returns the non-variational parameters"""
-        return np.zeros(0)
 
     def newtrack(self, method):
         """A simple method for keeping track of the optimisation"""
         self.tracktypes.append(method)
         self.tracks.append([])
+
     def track(self,stuff):
         self.tracks[-1].append(np.hstack([time.time(),stuff]))
+
     def closetrack(self):
         self.tracks[-1] = np.array(self.tracks[-1])
         self.tracks[-1][:,0] -= self.tracks[-1][0,0] # start timer from 0
+
     def plot_tracks(self,bytime=True):
+        from matplotlib import pyplot as plt
         #first plot the bound as a function of iterations (or time)
-        #pb.figure()
+        plt.figure()
         colours = {'steepest':'r','PR':'k','FR':'b', 'HS':'g', 'cg':'m','tnc':'c'}
         labels = {'steepest':'steepest (=VBEM)', 'PR':'Polack-Ribiere', 'FR':'Fletcher-Reeves', 'HS':'Hestenes-Stiefel','cg':'cg in gamma', 'tnc':'tnc in gamma'}
         for ty,col in colours.items():
@@ -90,24 +87,23 @@ class col_vb(GPy.core.model.Model):
                 if not len(t):
                     continue
                 t = np.vstack(t)
-                pb.plot(t[:,0],t[:,1],col,linewidth=1.7,label=labels[ty])
-                pb.xlabel('time (seconds)')
+                plt.plot(t[:,0],t[:,1],col,linewidth=1.7,label=labels[ty])
+                plt.xlabel('time (seconds)')
             else:
                 t = [np.vstack((np.vstack((np.arange(x.shape[0]),x[:,1])).T,np.nan*np.ones(2))) for x,tt in zip(self.tracks, self.tracktypes) if tt==ty]
                 if not len(t):
                     continue
                 t = np.vstack(t)
-                pb.plot(t[:,0],t[:,1],col,linewidth=1.7,label=labels[ty])# just plot by iteration
-                pb.xlabel('iterations')
+                plt.plot(t[:,0],t[:,1],col,linewidth=1.7,label=labels[ty])# just plot by iteration
+                plt.xlabel('iterations')
             #now plot crosses on the ends
             if bytime:
                 x = np.vstack([t[-1] for t,tt in zip(self.tracks, self.tracktypes) if tt==ty])
             else:
                 x = np.array([[len(t),t[-1,1]] for t,tt in zip(self.tracks, self.tracktypes) if tt==ty])
-            pb.plot(x[:,0],x[:,1],col+'x',mew=1.5)
-        pb.ylabel('bound')
-        #pb.semilogx()
-        pb.legend(loc=4)
+            plt.plot(x[:,0],x[:,1],col+'x',mew=1.5)
+        plt.ylabel('bound')
+        plt.legend(loc=4)
 
     #def _ls_ffp(self,x):
         #""" objective for line search routine TODO: unify this and the below with a better line-search"""
@@ -303,7 +299,7 @@ class col_vb(GPy.core.model.Model):
     def optimize_parameters(self):
         """ optimises the model parameters (non variational parameters)
         Returns the increment in the bound acheived"""
-        if self._get_params().size:
+        if self.size:
             start = self.bound()
             GPy.core.model.Model.optimize(self,**self.hyperparam_opt_args)
             return self.bound()-start

@@ -1,5 +1,4 @@
 import numpy as np
-import pylab as pb
 from scipy import optimize, linalg
 from scipy.special import gammaln, digamma
 import sys
@@ -14,32 +13,33 @@ class MOHGP(collapsed_mixture):
     A Hierarchical Mixture of Gaussian Processes
     A hierarchy is formed by using a GP prior for the cluster function values and another for the likelihood
     """
-    def __init__(self, X, kernF, kernY, Y, K=2, alpha=1., prior_Z='symmetric'):
+    def __init__(self, X, kernF, kernY, Y, K=2, alpha=1., prior_Z='symmetric', name='MOHGP'):
+
         N,self.D = Y.shape
         self.Y = Y
         self.X = X
         assert X.shape[0]==self.D, "input data don't match observations"
 
-        #initialize kernels
+        collapsed_mixture.__init__(self, N, K, prior_Z, alpha, name)
+
         self.kernF = kernF
         self.kernY = kernY
+        self.add_parameters(self.kernF, self.kernY)
+
+        #initialize kernels
         self.Sf = self.kernF.K(self.X)
         self.Sy = self.kernY.K(self.X)
         self.Sy_inv, self.Sy_chol, self.Sy_chol_inv, self.Sy_logdet = pdinv(self.Sy)
-
 
         #Computations that can be done outside the optimisation loop
         self.YYT = self.Y[:,:,np.newaxis]*self.Y[:,np.newaxis,:]
         self.YTY = np.dot(self.Y.T,self.Y)
 
-        collapsed_mixture.__init__(self, N, K, prior_Z, alpha)
+        self.do_computations()
 
-    def _set_params(self,x):
+
+    def parameters_changed(self):
         """ Set the kernel parameters. Note that the variational parameters are handled separately."""
-        #st the kernels with their parameters
-        self.kernF._set_params_transformed(x[:self.kernF.num_params])
-        self.kernY._set_params_transformed(x[self.kernF.num_params:])
-
         #get the latest kernel matrices, decompose
         self.Sf = self.kernF.K(self.X)
         self.Sy = self.kernY.K(self.X)
@@ -47,17 +47,34 @@ class MOHGP(collapsed_mixture):
 
         #update everything
         self.do_computations()
+        self.update_kern_grads()
 
-    def _get_params(self):
-        """ returns the kernel parameters """
-        return np.hstack([self.kernF._get_params_transformed(), self.kernY._get_params_transformed()])
 
-    def _get_param_names(self):
-        return ['kernF_'+ n for n in self.kernF._get_param_names_transformed()] + ['kernY_' + n for n in self.kernY._get_param_names_transformed()]
-
-    def _log_likelihood_gradients(self):
+    def do_computations(self):
         """
-        The derivative of the lower bound wrt the (kernel) parameters
+        Here we do all the computations that are required whenever the kernels
+        or the varaitional parameters are changed
+        """
+        #sufficient stats.
+        self.ybark = np.dot(self.phi.T,self.Y).T
+
+        # compute posterior variances of each cluster (lambda_inv)
+        tmp = backsub_both_sides(self.Sy_chol, self.Sf, transpose='right')
+        self.Cs = [np.eye(self.D) + tmp*phi_hat_i for phi_hat_i in self.phi_hat]
+
+        self._C_chols = [jitchol(C) for C in self.Cs]
+        self.log_det_diff = np.array([2.*np.sum(np.log(np.diag(L))) for L in self._C_chols])
+        tmp = [dtrtrs(L, self.Sy_chol.T, lower=1)[0] for L in self._C_chols]
+        self.Lambda_inv = np.array([( self.Sy - np.dot(tmp_i.T, tmp_i) )/phi_hat_i if (phi_hat_i>1e-6) else self.Sf for phi_hat_i, tmp_i in zip(self.phi_hat, tmp)])
+
+        #posterior mean and other useful quantities
+        self.Syi_ybark, _ = dpotrs(self.Sy_chol, self.ybark, lower=1)
+        self.Syi_ybarkybarkT_Syi = self.Syi_ybark.T[:,None,:]*self.Syi_ybark.T[:,:,None]
+        self.muk = (self.Lambda_inv*self.Syi_ybark.T[:,:,None]).sum(1).T
+
+    def update_kern_grads(self):
+        """
+        set the derivative of the lower bound wrt the (kernel) parameters
         """
 
         tmp = [dtrtrs(L, self.Sy_chol_inv, lower=1)[0] for L in self._C_chols]
@@ -73,7 +90,7 @@ class MOHGP(collapsed_mixture):
         tmp += -0.5*sum(B_invs)
 
         #kernF_grads = np.array([np.sum(tmp*g) for g in self.kernF.extract_gradients()]) # OKAY!
-        kernF_grads = self.kernF.dK_dtheta(tmp,self.X)
+        self.kernF.update_gradients_full(dL_dK=tmp,X=self.X)
 
         #gradient wrt Sigma_Y
         ybarkybarkT = self.ybark.T[:,None,:]*self.ybark.T[:,:,None]
@@ -85,31 +102,7 @@ class MOHGP(collapsed_mixture):
         tmp /= 2.
 
         #kernY_grads = np.array([np.sum(tmp*g) for g in self.kernY.extract_gradients()])
-        kernY_grads = self.kernY.dK_dtheta(tmp,self.X)
-
-        return np.hstack((kernF_grads, kernY_grads))
-
-    def do_computations(self):
-        """
-        Here we do all the computations that are required whenever the kernels or the varaitional parameters are changed
-        """
-        #sufficient stats. speed bottleneck?
-        self.ybark = np.dot(self.phi.T,self.Y).T
-        #self.Ck = np.dstack([np.dot(self.Y.T,phi[:,None]*self.Y) for phi in self.phi.T])
-
-        # compute posterior variances of each cluster (lambda_inv)
-        tmp = backsub_both_sides(self.Sy_chol, self.Sf, transpose='right')
-        self.Cs = [np.eye(self.D) + tmp*phi_hat_i for phi_hat_i in self.phi_hat]
-
-        self._C_chols = [jitchol(C) for C in self.Cs]
-        self.log_det_diff = np.array([2.*np.sum(np.log(np.diag(L))) for L in self._C_chols])
-        tmp = [dtrtrs(L, self.Sy_chol.T, lower=1)[0] for L in self._C_chols]
-        self.Lambda_inv = np.array([( self.Sy - np.dot(tmp_i.T, tmp_i) )/phi_hat_i if (phi_hat_i>1e-6) else self.Sf for phi_hat_i, tmp_i in zip(self.phi_hat, tmp)])
-
-        #posterior mean and other useful quantities
-        self.Syi_ybark, _ = dpotrs(self.Sy_chol, self.ybark, lower=1)
-        self.Syi_ybarkybarkT_Syi = self.Syi_ybark.T[:,None,:]*self.Syi_ybark.T[:,:,None]
-        self.muk = (self.Lambda_inv*self.Syi_ybark.T[:,:,None]).sum(1).T
+        self.kernY.update_gradients_full(dL_dK=tmp, X=self.X)
 
     def bound(self):
         """Compute the lower bound on the marginal likelihood (conditioned on the GP hyper parameters). """
@@ -153,12 +146,14 @@ class MOHGP(collapsed_mixture):
         return mu,var
 
     def plot_simple(self):
+        from matplotlib import pyplot as plt
         assert self.X.shape[1]==1, "can only plot mixtures of 1D functions"
-        #pb.figure()
-        pb.plot(self.Y.T,'k',linewidth=0.5,alpha=0.4)
-        pb.plot(self.muk[:,self.phi_hat>1e-3],'k',linewidth=2)
+        #plt.figure()
+        plt.plot(self.Y.T,'k',linewidth=0.5,alpha=0.4)
+        plt.plot(self.muk[:,self.phi_hat>1e-3],'k',linewidth=2)
 
     def plot(self, on_subplots=False,colour=False,newfig=True,errorbars=False, in_a_row=False,joined=True, gpplot=True,min_in_cluster=1e-3, data_in_grey=False, numbered=True, data_in_duplicate=False, fixed_inputs=[]):
+        from matplotlib import pyplot as plt
 
         #work out what input dimensions to plot
         fixed_dims = np.array([i for i,v in fixed_inputs])
@@ -167,10 +162,10 @@ class MOHGP(collapsed_mixture):
 
         #figure, subplots
         if newfig:
-            f = pb.figure()
+            fig = plt.figure()
         else:
-            f = pb.gcf()
-        GPy.util.plot.Tango.reset()
+            fig = plt.gcf()
+        GPy.plotting.matplot_dep.Tango.reset()
 
         if data_in_duplicate:
             X = self.X[::2, free_dims]
@@ -190,7 +185,7 @@ class MOHGP(collapsed_mixture):
                 Ny = int(np.ceil(Ntotal/Nx))
                 Nx = int(Nx)
         else:
-            ax = pb.gca() # this seems to make new ax if needed
+            ax = plt.gca() # this seems to make new ax if needed
 
         #limits of GPs
         xmin,xmax = X.min(), X.max()
@@ -211,10 +206,10 @@ class MOHGP(collapsed_mixture):
                 if not np.any(ii):
                     continue
                 if on_subplots:
-                    ax = pb.subplot(Nx,Ny,subplot_count+1)
+                    ax = fig.add_subplot(Nx,Ny,subplot_count+1)
                     subplot_count += 1
                 if colour:
-                    col = GPy.util.plot.Tango.nextMedium()
+                    col = GPy.plotting.matplot_dep.Tango.nextMedium()
                 else:
                     col='k'
                 if joined:
@@ -228,7 +223,7 @@ class MOHGP(collapsed_mixture):
                     else:
                         ax.plot(X,Y[ii].T,col,marker='.', linewidth=0.0,alpha=1)
 
-                if gpplot: GPy.util.plot.gpplot(Xgrid[:,free_dims].flatten(),mu.flatten(),mu- 2.*np.sqrt(np.diag(var)),mu+2.*np.sqrt(np.diag(var)),col,col,axes=ax,alpha=0.1)
+                if gpplot: GPy.plotting.matplot_dep.base_plots.gpplot(Xgrid[:,free_dims].flatten(),mu.flatten(),mu- 2.*np.sqrt(np.diag(var)),mu+2.*np.sqrt(np.diag(var)),col,col,ax=ax,alpha=0.1)
 
                 if numbered and on_subplots:
                     ax.text(1,1,str(int(num_in_clust)),transform=ax.transAxes,ha='right',va='top',bbox={'ec':'k','lw':1.3,'fc':'w'})
@@ -237,9 +232,10 @@ class MOHGP(collapsed_mixture):
                 if errorbars:ax.errorbar(self.X.flatten(), self.muk[:,i], yerr=err,ecolor=col, elinewidth=2, linewidth=0)
 
         if on_subplots:
-            GPy.util.plot.align_subplots(Nx,Ny,xlim=(xmin,xmax))
+            GPy.plotting.matplot_dep.base_plots.align_subplots(Nx,Ny,xlim=(xmin,xmax))
         else:
             ax.set_xlim(xmin,xmax)
+
 def multiple_mahalanobis(X1, X2, L):
     """
     X1 is a N1 x D array

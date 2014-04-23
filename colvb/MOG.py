@@ -2,7 +2,6 @@
 # Licensed under the GPL v3 (see LICENSE.txt)
 
 import numpy as np
-import pylab as pb
 from scipy import optimize, linalg
 from utilities import softmax, multiple_pdinv, lngammad, ln_dirichlet_C
 from scipy.special import gammaln, digamma
@@ -92,8 +91,9 @@ class MOG(collapsed_mixture):
         return Z.sum(1)
 
     def plot(self, newfig=True):
+        from matplotlib import pyplot as plt
         if self.X.shape[1]==2:
-            if newfig:pb.figure()
+            if newfig:plt.figure()
             xmin, ymin = self.X.min(0)
             xmax, ymax = self.X.max(0)
             xmin, xmax = xmin-0.1*(xmax-xmin), xmax+0.1*(xmax-xmin)
@@ -102,13 +102,13 @@ class MOG(collapsed_mixture):
             Xgrid = np.vstack((xx.flatten(), yy.flatten())).T
             zz = self.predict(Xgrid).reshape(100, 100)
             zz_data = self.predict(self.X)
-            pb.contour(xx, yy, zz, [stats.scoreatpercentile(zz_data, 5)], colors='k', linewidths=3)
-            pb.scatter(self.X[:,0], self.X[:,1], 30, np.argmax(self.phi, 1), linewidth=0, cmap=pb.cm.gist_rainbow)
+            plt.contour(xx, yy, zz, [stats.scoreatpercentile(zz_data, 5)], colors='k', linewidths=3)
+            plt.scatter(self.X[:,0], self.X[:,1], 30, np.argmax(self.phi, 1), linewidth=0, cmap=plt.cm.gist_rainbow)
 
             zz_components = self.predict_components(Xgrid)
             phi_hat = self.phi.sum(0)
             pi = phi_hat+self.alpha
             pi /= pi.sum()
             zz_components *= pi[np.newaxis,:]
-            [pb.contour(xx, yy, zz.reshape(100, 100), [stats.scoreatpercentile(zz_data, 5.)], colors='k', linewidths=1) for zz in zz_components.T]
+            [plt.contour(xx, yy, zz.reshape(100, 100), [stats.scoreatpercentile(zz_data, 5.)], colors='k', linewidths=1) for zz in zz_components.T]
 

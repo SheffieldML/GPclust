@@ -1,4 +1,4 @@
-# Copyright (c) 2012 James Hensman
+# Copyright (c) 2012, 2014 James Hensman
 # Licensed under the GPL v3 (see LICENSE.txt)
 
 import numpy as np
@@ -17,7 +17,7 @@ class collapsed_mixture(col_vb):
     This handles the mixing proportion part of the model,
     as well as providing generic functions for a merge-split approach
     """
-    def __init__(self, N,K, prior_Z='symmetric', alpha=1.0):
+    def __init__(self, N, K, prior_Z='symmetric', alpha=1.0, name='col_mix'):
         """
         Arguments:
         N: the number of data
@@ -25,15 +25,20 @@ class collapsed_mixture(col_vb):
         prior_Z: whether to use a truncated DP prior for Z or a symmetric prior
         alpha: parameter of the mixing proportion prior
         """
+        col_vb.__init__(self, name)
         self.N, self.K = N,K
         assert prior_Z in ['symmetric','DP']
         self.prior_Z = prior_Z
         self.alpha = alpha # TODO: make this a model parameter?
 
         #random initial conditions for the vb parameters
-        self.set_vb_param(np.random.randn(self.N*self.K))
-
-        col_vb.__init__(self)
+        self.phi_ = np.random.randn(self.N, self.K)
+        self.phi, logphi, self.H = softmax_weave(self.phi_)
+        self.phi_hat = self.phi.sum(0)
+        self.Hgrad = -logphi
+        if self.prior_Z=='DP':
+            self.phi_tilde_plus_hat = self.phi_hat[::-1].cumsum()[::-1]
+            self.phi_tilde = self.phi_tilde_plus_hat - self.phi_hat
 
     def set_vb_param(self,phi_):
         #unflatten and softmax
