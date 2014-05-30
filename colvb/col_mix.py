@@ -126,7 +126,7 @@ class collapsed_mixture(col_vb):
 
         bound_old = self.bound()
         phi_old = self.get_vb_param().copy()
-        param_old = self._get_params_transformed()
+        param_old = self.optimizer_array.copy()
         old_K = self.K
 
         #re-initalize
@@ -156,7 +156,7 @@ class collapsed_mixture(col_vb):
         if (bound_increase < 1e-3):
             self.K = old_K
             self.set_vb_param(phi_old)
-            self._set_params_transformed(param_old)
+            self.optimizer_array = param_old
             print "split failed, bound changed by: ",bound_increase, '(K=%s)'%self.K
             return False
         else:
