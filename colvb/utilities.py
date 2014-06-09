@@ -6,34 +6,6 @@ from scipy import linalg, special, sparse, weave
 import sys # for flushing
 import GPy
 
-def safe_GP_inv(K,w):
-    """
-    Arguments
-    ---------
-    K, a NxN pd matrix
-    w, a N-vector
-
-    Returns
-    -------
-    (K^-1 + diag(w))^-1
-    and
-    (1/2)*(ln|K^-1 + diag(w)| + ln|K|)
-    and
-    chol(K + diag(1./w))
-    """
-    N = w.size
-    assert K.shape==(N,N)
-    w_sqrt = np.sqrt(w)
-    W_inv = np.diag(1./w)
-    W_sqrt_inv = np.diag(1./w_sqrt)
-
-    B = np.eye(N) + np.dot(w_sqrt[:,None],w_sqrt[None,:])*K
-    cho = linalg.cho_factor(B)
-    T = linalg.cho_solve(cho,W_sqrt_inv)
-    ret = W_inv - np.dot(W_sqrt_inv,T)
-    return ret, np.sum(np.log(np.diag(cho[0]))), (np.dot(cho[0],W_sqrt_inv), cho[1])
-
-
 def blockdiag(xx):
     """
     Create a block diagonal matrix from a list of smaller matrices
