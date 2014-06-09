@@ -47,25 +47,6 @@ def jitchol(A,maxtries=5):
                 jitter *= 10
         raise linalg.LinAlgError,"not positive definite, even with jitter."
 
-
-def pdinv(A):
-    """
-    Arguments
-    ---------
-    A : A DxD pd numpy array
-
-    Returns
-    -------
-    inv : the inverse of A
-    hld: 0.5* the log of the determinant of A
-    """
-    L = jitchol(A)
-    hld = np.sum(np.log(np.diag(L[0])))
-    inv = linalg.flapack.dpotri(L[0],True)[0]
-    inv = np.triu(inv)+np.triu(inv,1).T
-    return inv, hld
-
-
 def multiple_pdinv(A):
     """
     Arguments
