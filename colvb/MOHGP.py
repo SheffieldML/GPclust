@@ -24,7 +24,7 @@ class MOHGP(collapsed_mixture):
 
         self.kernF = kernF
         self.kernY = kernY
-        self.add_parameters(self.kernF, self.kernY)
+        self.link_parameters(self.kernF, self.kernY)
 
         #initialize kernels
         self.Sf = self.kernF.K(self.X)
