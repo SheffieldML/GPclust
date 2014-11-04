@@ -1,14 +1,12 @@
-# Copyright (c) 2012, 2014 James Hensman
+# Copyright (c) 2012, 2013, 2014 James Hensman
 # Licensed under the GPL v3 (see LICENSE.txt)
 
 import numpy as np
-import pylab as pb
-from scipy import optimize, linalg
-from utilities import softmax, ln_dirichlet_C, softmax_weave
+from utilities import ln_dirichlet_C, softmax_weave
 from scipy.special import gammaln, digamma
-from col_vb import col_vb
+from collapsed_vb import CollapsedVB
 
-class collapsed_mixture(col_vb):
+class CollapsedMixture(CollapsedVB):
     """
     A base class for collapsed mixture models based of the col_vb class
 
@@ -19,10 +17,11 @@ class collapsed_mixture(col_vb):
     """
     def __init__(self, N, K, prior_Z='symmetric', alpha=1.0, name='col_mix'):
         """
-        Arguments:
+        Arguments
+        =========
         N: the number of data
         K: the (initial) number of cluster (or truncation)
-        prior_Z: whether to use a truncated DP prior for Z or a symmetric prior
+        prior_Z  - either 'symmetric' or 'dp', specifies whether to use a symmetric dirichelt prior for the clusters, or a (truncated) Dirichlet Process.
         alpha: parameter of the mixing proportion prior
         """
         col_vb.__init__(self, name)

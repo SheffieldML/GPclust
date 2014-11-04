@@ -1,11 +1,11 @@
-# Copyright (c) 2012 James Hensman
+# Copyright (c) 2012, 2013, 2014 James Hensman
 # Licensed under the GPL v3 (see LICENSE.txt)
 import numpy as np
 import GPy
 import time
 import sys #for flushing
 
-class col_vb(GPy.core.Model):
+class CollapsedVB(GPy.core.Model):
     """
     A base class for collapsed variational models, using the GPy framework for
     non-variational parameters.

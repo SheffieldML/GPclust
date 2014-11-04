@@ -1,17 +1,30 @@
+# Copyright (c) 2012, 2013, 2014 James Hensman
+# Licensed under the GPL v3 (see LICENSE.txt)
+
 import numpy as np
-from scipy import optimize, linalg
-from scipy.special import gammaln, digamma
-import sys
-from col_vb import col_vb
-from col_mix import collapsed_mixture
+from collapsed_mixture import CollapsedMixture
 import GPy
 from GPy.util.linalg import mdot, pdinv, backsub_both_sides, dpotrs, jitchol, dtrtrs
 from scipy import weave
 
-class MOHGP(collapsed_mixture):
+class MOHGP(CollapsedMixture):
     """
     A Hierarchical Mixture of Gaussian Processes
-    A hierarchy is formed by using a GP prior for the cluster function values and another for the likelihood
+
+    A hierarchy is formed by using a GP model the mean function of a cluster,
+    and further GPs to model the deviation of each time-course in the cluster
+    from the mean.
+
+    Arguments
+    =========
+    X - the times of observation of the time series
+    Y - a np.array of the observed time-course values: each row contains a time series, each column represents a uniqui time point
+    kernF - A GPy kernel to model the mean function of each cluster
+    kernY - A GPy kernel to model the deviation of each of the time courses from the mean fro teh cluster
+    alpha - the A priori dirichlet concentrationn parameter
+    prior_Z  - either 'symmetric' or 'dp', specifies whether to use a symmetric dirichelt prior for the clusters, or a (truncated) Dirichlet Process.
+    name - a convenient string for printing the model (default MOHGP)
+
     """
     def __init__(self, X, kernF, kernY, Y, K=2, alpha=1., prior_Z='symmetric', name='MOHGP'):
 
@@ -20,7 +33,7 @@ class MOHGP(collapsed_mixture):
         self.X = X
         assert X.shape[0]==self.D, "input data don't match observations"
 
-        collapsed_mixture.__init__(self, N, K, prior_Z, alpha, name)
+        CollapsedMixture.__init__(self, N, K, prior_Z, alpha, name)
 
         self.kernF = kernF
         self.kernY = kernY
@@ -105,13 +118,23 @@ class MOHGP(collapsed_mixture):
         self.kernY.update_gradients_full(dL_dK=tmp, X=self.X)
 
     def bound(self):
-        """Compute the lower bound on the marginal likelihood (conditioned on the GP hyper parameters). """
-        return -0.5*(self.N*self.D*np.log(2.*np.pi) + self.log_det_diff.sum() + self.N*self.Sy_logdet + np.sum(self.YTY*self.Sy_inv))\
-            + 0.5*np.sum(self.Syi_ybarkybarkT_Syi*self.Lambda_inv)\
-            + self.mixing_prop_bound() + self.H
+        """
+        Compute the lower bound on the marginal likelihood (conditioned on the
+        GP hyper parameters).
+        """
+        return -0.5*(self.N*self.D*np.log(2.*np.pi)\
+                + self.log_det_diff.sum()\
+                + self.N*self.Sy_logdet\
+                + np.sum(self.YTY*self.Sy_inv))\
+                + 0.5*np.sum(self.Syi_ybarkybarkT_Syi*self.Lambda_inv)\
+                + self.mixing_prop_bound()\
+                + self.H
 
     def vb_grad_natgrad(self):
-        """Gradients of the bound"""
+        """
+        Natural Gradients of the bound with respect to phi, the variational
+        parameters controlling assignment of the data to clusters
+        """
         #yn_mk = self.Y[:,:,None]-self.muk[None,:,:]
         #ynmk2 = np.sum(np.dot(self.Sy_inv,yn_mk)*np.rollaxis(yn_mk,0,2),0)
         ynmk2 = multiple_mahalanobis(self.Y, self.muk.T, self.Sy_chol)
