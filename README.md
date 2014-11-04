@@ -1,20 +1,12 @@
-colvb
+GPclust
 =====
 
-Collapsed Variational Bayes. 
+Clustering time series using Gaussain processs and Variational Bayes. 
 
-***
+Currently implemented models are
 
-Currently implemented models include
-
-* LDA - Latent Dirichlet Allocation
 * MOG - Mixture of Gausians
-* MMOG - Multiple MOG (which is kind of like a continuous version of LDA)
 * MOHGP - Mixtures of Hierarchical Gaussian Processes
-
-Other files are common to several models:
-col_vb contains a skeleton for the class, and includes the optimiser
-col_mix contains the base class for a mixture model (MOG, MOHGP)
 
 Citation
 ========
@@ -63,6 +55,6 @@ http://www.biomedcentral.com/1471-2105/14/252
 Dependencies
 ------------
 
-This work depends on some functionality from the [GPy project](https://github.com/SheffieldML/GPy), as well as the numpy/scipy/matplotlib stack.
+This work depends on the [GPy project](https://github.com/SheffieldML/GPy), as well as the numpy/scipy stack. matplotlib is optional for plotting. 
 
-I've tested the demos with GPy v0.2, but it should work with later versions also. 
+I've tested the demos with GPy v0.6, but it should work with later versions also. 

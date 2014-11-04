@@ -1,5 +1,6 @@
 # Copyright (c) 2012, 2013, 2014 James Hensman
 # Licensed under the GPL v3 (see LICENSE.txt)
+
 import numpy as np
 import GPy
 import time
@@ -104,85 +105,6 @@ class CollapsedVB(GPy.core.Model):
             plt.plot(x[:,0],x[:,1],col+'x',mew=1.5)
         plt.ylabel('bound')
         plt.legend(loc=4)
-
-    #def _ls_ffp(self,x):
-        #""" objective for line search routine TODO: unify this and the below with a better line-search"""
-        #self.set_vb_param(x.copy())
-        #return -self.bound(), -self.vb_grad_natgrad()[0]
-
-    def optimize_restarts(self,Nrestarts=10,robust=False,**kwargs):
-        """TODO: integrate properly with GPy. probably means making a VB_optimiser class"""
-        params = [self.get_vb_param()]
-        bounds = [self.bound()]
-
-        for i in range(Nrestarts):
-            try:
-                self.randomize()
-                self.optimize(**kwargs)
-            except Exception as e:
-                if robust:
-                    print "Warning: optimization failed"
-                    continue
-                else:
-                    raise e
-            bounds.append(self.bound())
-            params.append(self.get_vb_param().copy())
-
-        self.set_vb_param(params[np.argmax(bounds)])
-
-
-    def E_time_to_opt(self, tolerance=0.1):
-        """
-        For each optimisation method, compute the expected time to find the best known solution, over all restarts
-        """
-        #find optimal solution (bound)
-        bmax = np.max([e[-1,1] for e in self.tracks]) - tolerance
-
-        labels = {'steepest':'steepest (=VBEM)', 'PR':'Polack-Ribiere', 'FR':'Fletcher-Reeves', 'HS':'Hestenes-Stiefel'}
-        for trty, l in labels.items():
-            time = np.sum([x[-1,0] for x,tt in zip(self.tracks, self.tracktypes) if tt==trty])
-            N_opt = np.sum([x[-1,1]>bmax for x,tt in zip(self.tracks, self.tracktypes) if tt==trty])
-            iters = np.sum([x.shape[0] for x,tt in zip(self.tracks, self.tracktypes) if tt==trty])*1.0 # force float division
-            print l, 'E[time]='+str(time/N_opt), 'E[iters]='+str(iters/N_opt)
-
-    def checkgrad_vb(self,**kwargs):
-        """subvert GPy's checkgrad routine to check the vb gradients"""
-        eg = self._log_likelihood_gradients_transformed
-        self._log_likelihood_gradients_transformed = lambda : self.vb_grad_natgrad()[0]
-
-        ep = self._set_params_transformed
-        self._set_params_transformed = lambda x: self.set_vb_param(x)
-
-        lp = self.log_prior
-        self.log_p = lambda x: 0.
-
-        et = self._get_params_transformed
-        self._get_params_transformed = lambda : self.get_vb_param()
-
-        en = self._get_param_names_transformed
-        pn = [str(i) for i in range(self.get_vb_param().size)]
-        self._get_param_names_transformed = lambda : pn
-
-        ret = self.checkgrad(**kwargs)
-
-        self._log_likelihood_gradients_transformed = eg
-        self._set_params_transformed = ep
-        self.log_prior = lp
-        self._get_params_transformed = et
-        self._get_param_names_transformed = en
-
-        return ret
-
-    def optimize_free_form(self, maxiter=500,ftol=1e-6):
-        """Optimize the variational part o the model using the TNC optimizer"""
-        def f_fprime(x):
-            self.set_vb_param(x)
-            return self.bound(), self.vb_grad_natgrad()[0]
-        start = self.get_vb_param()
-        from scipy import optimize
-        opt,nf,rc = optimize.fmin_tnc(f_fprime,start,ftol=ftol)
-        self.set_vb_param(opt)
-        print nf, 'iters'
 
     def optimize(self,method=None, maxiter=500, ftol=1e-6, gtol=1e-6, step_length=1., line_search=False, callback=None):
         """
