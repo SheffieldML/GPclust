@@ -25,6 +25,17 @@ http://books.nips.cc/papers/files/nips25/NIPS2012_1314.pdf
 ```
 
 The code also implements clustering of Hierachical Gaussian Processes using that inference framework, detailed in the two following works:
+@article{hensman2014fast,
+  author={Hensman, J. and Rattray, M. and Lawrence, N.},
+  journal={Pattern Analysis and Machine Intelligence, IEEE Transactions on},
+  title={Fast nonparametric clustering of structured time-series},
+  year={2014},
+  volume={PP},
+  number={99},
+  keywords={Biological system modeling;Computational modeling;Data models;Gaussian processes;Optimization;Time series analysis},
+  doi={10.1109/TPAMI.2014.2318711},
+  ISSN={0162-8828}
+}
 
 http://arxiv.org/abs/1401.1605
 ```TeX
