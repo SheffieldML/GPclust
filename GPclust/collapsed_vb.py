@@ -106,7 +106,7 @@ class CollapsedVB(GPy.core.Model):
         plt.ylabel('bound')
         plt.legend(loc=4)
 
-    def optimize(self,method=None, maxiter=500, ftol=1e-6, gtol=1e-6, step_length=1., line_search=False, callback=None):
+    def optimize(self,method=None, maxiter=500, ftol=1e-6, gtol=1e-6, step_length=1., line_search=False, callback=None, verbose=True):
         """
         Optimize the model
 
@@ -164,7 +164,7 @@ class CollapsedVB(GPy.core.Model):
                 alpha = LS.line_search(self._ls_ffp,xk.copy(),searchDir)
                 self.set_vb_param(xk + alpha*searchDir)
                 bound = self.bound()
-                print alpha, bound
+                if verbose:print alpha, bound
                 if bound < bound_old:
                     pdb.set_trace()
                 iteration += 1
@@ -186,20 +186,20 @@ class CollapsedVB(GPy.core.Model):
             # track:
             self.track(np.hstack((bound, beta)))
 
-            print '\riteration '+str(iteration)+' bound='+str(bound) + ' grad='+str(squareNorm) + ', beta='+str(beta),
+            if verbose:print '\riteration '+str(iteration)+' bound='+str(bound) + ' grad='+str(squareNorm) + ', beta='+str(beta),
             sys.stdout.flush()
 
             # converged yet? try the parameters if so
             if np.abs(bound-bound_old)<=ftol:
-                print 'vb converged (ftol)'
+                if verbose:print 'vb converged (ftol)'
                 if self.optimize_parameters()<1e-1:
                     break
             if squareNorm<=gtol:
-                print 'vb converged (gtol)'
+                if verbose:print 'vb converged (gtol)'
                 if self.optimize_parameters()<1e-1:
                     break
             if iteration>=maxiter:
-                print 'maxiter exceeded'
+                if verbose:print 'maxiter exceeded'
                 break
 
             #store essentials of previous iteration

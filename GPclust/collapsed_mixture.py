@@ -147,7 +147,7 @@ class CollapsedMixture(CollapsedVB):
         self.set_vb_param(self.get_vb_param())
 
 
-        self.optimize(maxiter=100)
+        self.optimize(maxiter=100, verbose=verbose)
         self.remove_empty_clusters()
         bound_new = self.bound()
 
@@ -161,7 +161,7 @@ class CollapsedMixture(CollapsedVB):
         else:
             if verbose:print "split suceeded, bound changed by: ",bound_increase, ',',self.K-old_K,' new clusters', '(K=%s)'%self.K
             if verbose:print "optimizing new split to convergence:"
-            self.optimize(maxiter=5000)
+            self.optimize(maxiter=5000, verbose=verbose)
             return True
 
     def systematic_splits(self, verbose=True):
