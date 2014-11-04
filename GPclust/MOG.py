@@ -19,23 +19,30 @@ class MOG(CollapsedMixture):
     prior_Z  - either 'symmetric' or 'dp', specifies whether to use a symmetric dirichelt prior for the clusters, or a (truncated) Dirichlet Process.
     name - a convenient string for printing the model (default MOG)
 
+    Optional arguments for the parameters of the Gaussian-Wishart priors on the clusters
+    prior_m - prior mean
+    prior_kappa - prior connectivity
+    prior_S - prior Wishart covariance
+    prior_v - prior Wishart degrees of freedom
+
     """
-    def __init__(self, X, K=2, prior_Z='symmetric', alpha=10., name='MOG'):
+    def __init__(self, X, K=2, prior_Z='symmetric', alpha=10., prior_m=None, prior_kappa=None, prior_S=None, prior_v=None, name='MOG'):
         self.X = X
         self.N, self.D = X.shape
 
-        #prior cluster parameters
-        self.m0 = self.X.mean(0) # priors on the Gaussian components
-        self.k0 = 1e-6
-        self.S0 = np.eye(self.D)*1e-3
-        self.S0_halflogdet = np.sum(np.log(np.sqrt(np.diag(self.S0))))
-        self.v0 = self.D+1.
+        # store the prior cluster parameters
+        self.m0 = self.X.mean(0) if prior_m is None else prior_m
+        self.k0 = prior_kappa or 1e-6
+        self.S0 = np.eye(self.D)*1e-3 if prior_S is None else prior_S
+        self.v0 = prior_v or self.D+1.
 
         #precomputed stuff
         self.k0m0m0T = self.k0*self.m0[:,np.newaxis]*self.m0[np.newaxis,:]
         self.XXT = self.X[:,:,np.newaxis]*self.X[:,np.newaxis,:]
+        self.S0_halflogdet = np.sum(np.log(np.sqrt(np.diag(np.linalg.cholesky(self.S0)))))
 
         CollapsedMixture.__init__(self, self.N, K, prior_Z, alpha, name=name)
+        self.do_computations()
 
     def do_computations(self):
         #computations needed for bound, gradient and predictions
@@ -68,17 +75,6 @@ class MOG(CollapsedMixture):
 
         natgrad = grad_phi - np.sum(self.phi*grad_phi, 1)[:,None] # corrects for softmax (over) parameterisation
         grad = natgrad*self.phi
-
-    Arguments
-    =========
-    X - the times of observation of the time series
-    Y - a np.array of the observed time-cours values: each row contains a time series, each column represents a uniqui time point
-    kernF - A GPy kernel to model the mean function of each cluster
-    kernY - A GPy kernel to model the deviation of each of the time courses from the mean fro teh cluster
-    alpha - the A priori dirichlet concentrationn parameter
-    prior_Z  - either 'symmetric' or 'dp', specifies whether to use a symmetric dirichelt prior for the clusters, or a (truncated) Dirichlet Process.
-    name - a convenient string for printing the model (default MOHGP)
-
 
         return grad.flatten(), natgrad.flatten()
 

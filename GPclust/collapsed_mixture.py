@@ -24,7 +24,7 @@ class CollapsedMixture(CollapsedVB):
         prior_Z  - either 'symmetric' or 'dp', specifies whether to use a symmetric dirichelt prior for the clusters, or a (truncated) Dirichlet Process.
         alpha: parameter of the mixing proportion prior
         """
-        col_vb.__init__(self, name)
+        CollapsedVB.__init__(self, name)
         self.N, self.K = N,K
         assert prior_Z in ['symmetric','DP']
         self.prior_Z = prior_Z
@@ -95,7 +95,7 @@ class CollapsedMixture(CollapsedVB):
         self.K = i.sum()
         self.set_vb_param(phi_)
 
-    def try_split(self,indexK=None,threshold=0.9):
+    def try_split(self, indexK=None, threshold=0.9, verbose=True):
         """
         Re-initialize one of the clusters as two clusters, optimize, and keep
         the solution if the bound is increased. Kernel hypers stay constant.
@@ -121,7 +121,7 @@ class CollapsedMixture(CollapsedVB):
         if np.sum(self.phi[:,indexK]>threshold) <2:
             return False
 
-        print "\nattempting to split cluster ", indexK
+        if verbose:print "\nattempting to split cluster ", indexK
 
         bound_old = self.bound()
         phi_old = self.get_vb_param().copy()
@@ -156,33 +156,33 @@ class CollapsedMixture(CollapsedVB):
             self.K = old_K
             self.set_vb_param(phi_old)
             self.optimizer_array = param_old
-            print "split failed, bound changed by: ",bound_increase, '(K=%s)'%self.K
+            if verbose:print "split failed, bound changed by: ",bound_increase, '(K=%s)'%self.K
             return False
         else:
-            print "split suceeded, bound changed by: ",bound_increase, ',',self.K-old_K,' new clusters', '(K=%s)'%self.K
-            print "optimizing new split to convergence:"
+            if verbose:print "split suceeded, bound changed by: ",bound_increase, ',',self.K-old_K,' new clusters', '(K=%s)'%self.K
+            if verbose:print "optimizing new split to convergence:"
             self.optimize(maxiter=5000)
             return True
 
-    def systematic_splits(self):
+    def systematic_splits(self, verbose=True):
         """
         perform recursive splits on each of the existing clusters
         """
         for kk in range(self.K):
-            self.recursive_splits(kk)
+            self.recursive_splits(kk, verbose=verbose)
 
-    def recursive_splits(self,k=0):
+    def recursive_splits(self,k=0, verbose=True):
         """
         A recursive function which attempts to split a cluster (indexed by k), and if sucessful attempts to split the resulting clusters
         """
-        success = self.try_split(k)
+        success = self.try_split(k, verbose=verbose)
         if success:
             if not k==(self.K-1):
-                self.recursive_splits(self.K-1)
-            self.recursive_splits(k)
+                self.recursive_splits(self.K-1, verbose=verbose)
+            self.recursive_splits(k, verbose=verbose)
 
 
-class mix_gradchecker(collapsed_mixture):
+class mix_gradchecker(CollapsedMixture):
     """only for debugging the gradients of the DP part of the bound"""
     def check(self,x=None):
         if x is None:

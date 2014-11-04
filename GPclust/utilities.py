@@ -18,9 +18,9 @@ def multiple_pdinv(A):
     hld: 0.5* the log of the determinants of A
     """
     N = A.shape[-1]
-    chols = [jitchol(A[:,:,i]) for i in range(N)]
-    halflogdets = [np.sum(np.log(np.diag(L[0]))) for L in chols]
-    invs = [GPy.util.linalg.dpotri(L[0],True)[0] for L in chols]
+    chols = [GPy.util.linalg.jitchol(A[:,:,i]) for i in range(N)]
+    halflogdets = [np.sum(np.log(np.diag(L))) for L in chols]
+    invs = [GPy.util.linalg.dpotri(L,True)[0] for L in chols]
     invs = [np.triu(I)+np.triu(I,1).T for I in invs]
     return np.dstack(invs),np.array(halflogdets)
 
