@@ -25,6 +25,9 @@ http://books.nips.cc/papers/files/nips25/NIPS2012_1314.pdf
 ```
 
 The code also implements clustering of Hierachical Gaussian Processes using that inference framework, detailed in the two following works:
+
+http://ieeexplore.ieee.org/xpls/abs_all.jsp?arnumber=6802369
+```TeX
 @article{hensman2014fast,
   author={Hensman, J. and Rattray, M. and Lawrence, N.},
   journal={Pattern Analysis and Machine Intelligence, IEEE Transactions on},
@@ -36,16 +39,8 @@ The code also implements clustering of Hierachical Gaussian Processes using that
   doi={10.1109/TPAMI.2014.2318711},
   ISSN={0162-8828}
 }
-
-http://arxiv.org/abs/1401.1605
-```TeX
-@article{hensman2014fast,
-  title={Fast variational inference for nonparametric clustering of structured time-series},
-  author={Hensman, James and Rattray, Magnus and Lawrence, Neil D},
-  journal={arXiv preprint arXiv:1401.1605},
-  year={2014}
-}
 ```
+
 http://www.biomedcentral.com/1471-2105/14/252
 ```TeX
 @article{hensman2013hierarchical,
