@@ -175,7 +175,27 @@ class MOHGP(CollapsedMixture):
         plt.plot(self.Y.T,'k',linewidth=0.5,alpha=0.4)
         plt.plot(self.muk[:,self.phi_hat>1e-3],'k',linewidth=2)
 
-    def plot(self, on_subplots=False,colour=False,newfig=True,errorbars=False, in_a_row=False,joined=True, gpplot=True,min_in_cluster=1e-3, data_in_grey=False, numbered=True, data_in_duplicate=False, fixed_inputs=[]):
+    def plot(self, on_subplots=True, colour=False, newfig=True, errorbars=False, in_a_row=False, joined=True, gpplot=True,min_in_cluster=1e-3, data_in_grey=False, numbered=True, data_in_duplicate=False, fixed_inputs=[]):
+        """
+        Plot the mixture of Gaussian processes. Some of these arguments are rather esoteric! The defaults should be okay for most cases.
+
+        Arguments
+        ---------
+
+        on_subplots (bool) whether to plot all the clusters on separate subplots (True), or all on the same plot (False)
+        colour      (bool) to cycle through colours (True) or plot in black nd white (False)
+        newfig      (bool) whether to make a new matplotlib figure(True) or use the current figure (False)
+        in_a_row    (bool) if true, plot the subplots (if using) in a single row. Else make the subplots approximately square.
+        joined      (bool) if true, connect the data points with lines
+        gpplot      (bool) if true, plto the posterior of the GP for each cluster.
+        min_in_cluster (float) ignore clusterse with less total assignemnt than this
+        data_in_grey (bool) whether the data should be plotted in black and white.
+        numbered    (bool) whether to include numbers on the top-right of each subplot.
+        data_in_duplicate (bool) whether to assume the data are in duplicate, and plot the mean of each duplicate instead of each data point
+        fixed_inputs (list of tuples, as GPy.GP.plot) for GPs defined on more that one input, we'll plot a slice of the GP. this list defines how to fix the remaining inputs.
+
+        """
+
         from matplotlib import pyplot as plt
 
         #work out what input dimensions to plot
