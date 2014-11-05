@@ -15,24 +15,24 @@ class MOG(CollapsedMixture):
     =========
     X - a np.array of the observed data: each row contains one datum.
     K - the number of clusters (or initial number of clusters in the Dirichlet Process case)
-    alpha - the A priori dirichlet concentrationn parameter
-    prior_Z  - either 'symmetric' or 'dp', specifies whether to use a symmetric dirichelt prior for the clusters, or a (truncated) Dirichlet Process.
+    alpha - the A priori dirichlet concentrationn parameter (default 1.)
+    prior_Z  - either 'symmetric' or 'DP', specifies whether to use a symmetric Dirichlet prior for the clusters, or a (truncated) Dirichlet process.
     name - a convenient string for printing the model (default MOG)
 
     Optional arguments for the parameters of the Gaussian-Wishart priors on the clusters
-    prior_m - prior mean
-    prior_kappa - prior connectivity
-    prior_S - prior Wishart covariance
-    prior_v - prior Wishart degrees of freedom
+    prior_m - prior mean (defaults to mean of the data)
+    prior_kappa - prior connectivity (default 1e-6)
+    prior_S - prior Wishart covariance (defaults to 1e-3 * I)
+    prior_v - prior Wishart degrees of freedom (defaults to dimension of the problem +1.)
 
     """
-    def __init__(self, X, K=2, prior_Z='symmetric', alpha=10., prior_m=None, prior_kappa=None, prior_S=None, prior_v=None, name='MOG'):
+    def __init__(self, X, K=2, prior_Z='symmetric', alpha=1., prior_m=None, prior_kappa=1e-6, prior_S=None, prior_v=None, name='MOG'):
         self.X = X
         self.N, self.D = X.shape
 
         # store the prior cluster parameters
         self.m0 = self.X.mean(0) if prior_m is None else prior_m
-        self.k0 = prior_kappa or 1e-6
+        self.k0 = prior_kappa
         self.S0 = np.eye(self.D)*1e-3 if prior_S is None else prior_S
         self.v0 = prior_v or self.D+1.
 
@@ -80,7 +80,7 @@ class MOG(CollapsedMixture):
 
 
     def predict_components_ln(self, Xnew):
-        """The predictive density under each component"""
+        """The log predictive density under each component at Xnew"""
         Dist = Xnew[:,:,np.newaxis]-self.mun[np.newaxis,:,:] # Nnew x D x K
         tmp = np.sum(Dist[:,:,None,:]*self.Sns_inv[None,:,:,:],1)#*(kn+1.)/(kn*(vn-self.D+1.))
         mahalanobis = np.sum(tmp*Dist, 1)/(self.kNs+1.)*self.kNs*(self.vNs-self.D+1.)
@@ -94,9 +94,11 @@ class MOG(CollapsedMixture):
         return Z
 
     def predict_components(self, Xnew):
+        """The predictive density under each component at Xnew"""
         return np.exp(self.predict_components_ln(Xnew))
 
     def predict(self, Xnew):
+        """The predictive density of the model at Xnew"""
         Z = self.predict_components(Xnew)
         #calculate the weights for each component
         phi_hat = self.phi.sum(0)
@@ -126,4 +128,6 @@ class MOG(CollapsedMixture):
             pi /= pi.sum()
             zz_components *= pi[np.newaxis,:]
             [plt.contour(xx, yy, zz.reshape(100, 100), [stats.scoreatpercentile(zz_data, 5.)], colors='k', linewidths=1) for zz in zz_components.T]
+        else:
+            print "plotting only for 2D mixtures"
 

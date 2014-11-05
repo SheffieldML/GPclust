@@ -104,10 +104,81 @@ def softmax_weave(X):
     H = weave.inline(code, arg_names=["X", "phi", "log_phi", "N", "D"], type_converters=weave.converters.blitz, support_code=weave_support_code, **weave_options)
     return phi, log_phi, H
 
+
+def multiple_mahalanobis(X1, X2, L):
+    """
+    X1 is a N1 x D array
+    X2 is a N2 x D array
+    L is a D x D array, lower triangular
+
+    compute (x1_n - x2_m).T * (L * L.T)^-1 * (x1_n - x2_m)
+
+    for each pair of the D_vectors x1_n, x2_m
+
+    Returns: a N1 x N2 array of each distance
+    """
+    N1,D = X1.shape
+    N2,D = X2.shape
+    assert L.shape == (D,D)
+    result = np.zeros(shape=(N1,N2), dtype=np.float64)
+
+    #configure weave for parallel (or not)
+    weave_options_openmp = {'headers'           : ['<omp.h>'],
+                            'extra_compile_args': ['-fopenmp -O3'],
+                            'extra_link_args'   : ['-lgomp'],
+                            'libraries': ['gomp']}
+    weave_options_noopenmp = {'extra_compile_args': ['-O3']}
+
+    if GPy.util.config.config.getboolean('parallel', 'openmp'):
+        weave_options = weave_options_openmp
+        weave_support_code =  """
+        #include <omp.h>
+        #include <math.h>
+        """
+    else:
+        weave_options = weave_options_noopenmp
+        weave_support_code = "#include <math.h>"
+
+    if GPy.util.config.config.getboolean('parallel', 'openmp'):
+        pragma_string = '#pragma omp parallel for private(n,m,i,j,tmp)'
+    else:
+        pragma_string = ''
+
+    code = """
+    double tmp [D];
+    //two loops over the N1 x N2 vectors
+    int n, m, i, j;
+    {pragma}
+    for(n=0; n<N1; n++){{
+      for(m=0; m<N2; m++){{
+
+        //a double loop to solve the cholesky problem into tmp (should really use blas?)
+        for(i=0; i<D; i++){{
+          tmp[i] = X1(n,i) - X2(m,i);
+          for(j=0; j<i; j++){{
+            tmp[i] -= L(i,j)*tmp[j];
+          }}
+          tmp[i] /= L(i,i);
+        }}
+
+        //loop over tmp to get the result: tmp.T * tmp (should really use blas again)
+        for(i=0; i<D; i++){{
+          result(n,m) += tmp[i]*tmp[i];
+        }}
+      }}
+    }}
+    """.format(pragma=pragma_string)
+    weave.inline(code, arg_names=["X1", "X2", "L", "N1", "N2", "D", "result"], type_converters=weave.converters.blitz, support_code=weave_support_code, **weave_options)
+    return result
+
+
+
 def lngammad(v,D):
+    """sum of log gamma functions, as appears in a Wishart Distribution"""
     return np.sum([special.gammaln((v+1.-d)/2.) for d in range(1,D+1)],0)
 
 def ln_dirichlet_C(a):
+    """the log-normalizer of a Dirichlet distribution"""
     return special.gammaln(a.sum())-np.sum(special.gammaln(a))
 
 

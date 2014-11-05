@@ -12,20 +12,16 @@ class CollapsedVB(GPy.core.Model):
     non-variational parameters.
 
     Optimisation of the (collapsed) variational paremters is performed by
-    Reimannian conjugate-gradient ascent, interleaved with optimisation of the
+    Riemannian conjugate-gradient ascent, interleaved with optimisation of the
     non-variational parameters
 
     This class specifies a scheme for implementing the model, as well as
-    providing the optimisation routine, and methods for tracking the optimisation
+    providing the optimisation routine.
     """
 
     def __init__(self, name):
         """"""
         GPy.core.Model.__init__(self, name)
-
-        #stuff for monitoring the different methods
-        self.tracks = []
-        self.tracktypes = []
 
         self.hyperparam_interval=50
 
@@ -54,61 +50,20 @@ class CollapsedVB(GPy.core.Model):
         """Returns the gradient and natural gradient of the variational parameters"""
 
     def log_likelihood(self):
-        """In optimising the non variational (e.g. kernel) parameters, use the
-        bound as a proxy for the likelihood"""
+        """
+        In optimising the non variational (e.g. kernel) parameters, use the
+        bound as a proxy for the likelihood
+        """
         return self.bound()
 
-    def log_likelihood_gradients(self):
-        """ Returns the gradient of the bound w.r.t. the non-variational parameters"""
-        raise NotImplementedError
-
-    def newtrack(self, method):
-        """A simple method for keeping track of the optimisation"""
-        self.tracktypes.append(method)
-        self.tracks.append([])
-
-    def track(self,stuff):
-        self.tracks[-1].append(np.hstack([time.time(),stuff]))
-
-    def closetrack(self):
-        self.tracks[-1] = np.array(self.tracks[-1])
-        self.tracks[-1][:,0] -= self.tracks[-1][0,0] # start timer from 0
-
-    def plot_tracks(self,bytime=True):
-        from matplotlib import pyplot as plt
-        #first plot the bound as a function of iterations (or time)
-        plt.figure()
-        colours = {'steepest':'r','PR':'k','FR':'b', 'HS':'g', 'cg':'m','tnc':'c'}
-        labels = {'steepest':'steepest (=VBEM)', 'PR':'Polack-Ribiere', 'FR':'Fletcher-Reeves', 'HS':'Hestenes-Stiefel','cg':'cg in gamma', 'tnc':'tnc in gamma'}
-        for ty,col in colours.items():
-            if not ty in self.tracktypes:
-                continue
-            if bytime:
-                t = [np.vstack((x[:,:2],np.nan*np.ones(2))) for x,tt in zip(self.tracks, self.tracktypes) if tt==ty]
-                if not len(t):
-                    continue
-                t = np.vstack(t)
-                plt.plot(t[:,0],t[:,1],col,linewidth=1.7,label=labels[ty])
-                plt.xlabel('time (seconds)')
-            else:
-                t = [np.vstack((np.vstack((np.arange(x.shape[0]),x[:,1])).T,np.nan*np.ones(2))) for x,tt in zip(self.tracks, self.tracktypes) if tt==ty]
-                if not len(t):
-                    continue
-                t = np.vstack(t)
-                plt.plot(t[:,0],t[:,1],col,linewidth=1.7,label=labels[ty])# just plot by iteration
-                plt.xlabel('iterations')
-            #now plot crosses on the ends
-            if bytime:
-                x = np.vstack([t[-1] for t,tt in zip(self.tracks, self.tracktypes) if tt==ty])
-            else:
-                x = np.array([[len(t),t[-1,1]] for t,tt in zip(self.tracks, self.tracktypes) if tt==ty])
-            plt.plot(x[:,0],x[:,1],col+'x',mew=1.5)
-        plt.ylabel('bound')
-        plt.legend(loc=4)
-
-    def optimize(self,method=None, maxiter=500, ftol=1e-6, gtol=1e-6, step_length=1., line_search=False, callback=None, verbose=True):
+    def optimize(self, method='HS', maxiter=500, ftol=1e-6, gtol=1e-6, step_length=1., callback=None, verbose=True):
         """
-        Optimize the model
+        Optimize the model.
+
+        The strategy is to run conjugate natural gradients on the variational
+        parameters, interleaved with gradient based optimization of any
+        non-variational parameters. self.hyperparam_interval dictates how
+        often this happens.
 
         Arguments
         ---------
@@ -116,27 +71,17 @@ class CollapsedVB(GPy.core.Model):
         :maxiter: int
         :ftol: float
         :gtol: float
-        :step_length: float (ignored if line-search is used)
-        :line_search: bool -- whether to perform line searches
+        :step_length: float
 
-        Notes
-        -----
-        OPtimisation of the hyperparameters is interleaved with
-        vb optimisation. The parameter self.hyperparam_interval
-        dictates how often.
         """
 
-        if method is None:
-            method = self.default_method
-        assert method in ['FR', 'PR','HS','steepest']
-        # track:
-        self.newtrack(method)
+        assert method in ['FR', 'PR','HS','steepest'], 'invalid conjugate gradient method specified.'
 
         iteration = 0
         bound_old = self.bound()
         while True:
 
-            if not callback is None:
+            if callback is not None:
                 callback()
 
             grad,natgrad = self.vb_grad_natgrad()
@@ -152,42 +97,27 @@ class CollapsedVB(GPy.core.Model):
                 beta = squareNorm/squareNorm_old
             elif (method=='HS'):
                 beta = np.dot((natgrad-natgrad_old),grad)/np.dot((natgrad-natgrad_old),grad_old)
-            if np.isnan(beta):
+            if np.isnan(beta) or (beta < 0.):
                 beta = 0.
-            if beta > 0:
-                searchDir = -natgrad + beta*searchDir_old
-            else:
+            searchDir = -natgrad + beta*searchDir_old
+
+            #try a conjugate step
+            phi_old = self.get_vb_param().copy()
+            self.set_vb_param(phi_old + step_length*searchDir)
+            bound = self.bound()
+            iteration += 1
+
+            #make sure there's an increase in the bound, else revert to steepest, which is guaranteed to increase the bound (it's the same as VBEM)
+            if bound<bound_old:
                 searchDir = -natgrad
-
-            if line_search:
-                xk = self.get_vb_param().copy()
-                alpha = LS.line_search(self._ls_ffp,xk.copy(),searchDir)
-                self.set_vb_param(xk + alpha*searchDir)
-                bound = self.bound()
-                if verbose:print alpha, bound
-                if bound < bound_old:
-                    pdb.set_trace()
-                iteration += 1
-
-            else:
-                #try a conjugate step
-                phi_old = self.get_vb_param().copy()
                 self.set_vb_param(phi_old + step_length*searchDir)
                 bound = self.bound()
                 iteration += 1
 
-                #make sure there's an increase in L, else revert to steepest
-                if bound<bound_old:
-                    searchDir = -natgrad
-                    self.set_vb_param(phi_old + step_length*searchDir)
-                    bound = self.bound()
-                    iteration += 1
 
-            # track:
-            self.track(np.hstack((bound, beta)))
-
-            if verbose:print '\riteration '+str(iteration)+' bound='+str(bound) + ' grad='+str(squareNorm) + ', beta='+str(beta),
-            sys.stdout.flush()
+            if verbose:
+                print '\riteration '+str(iteration)+' bound='+str(bound) + ' grad='+str(squareNorm) + ', beta='+str(beta),
+                sys.stdout.flush()
 
             # converged yet? try the parameters if so
             if np.abs(bound-bound_old)<=ftol:
@@ -215,12 +145,12 @@ class CollapsedVB(GPy.core.Model):
             bound_old = bound
 
 
-        # track:
-        self.closetrack()
 
     def optimize_parameters(self):
-        """ optimises the model parameters (non variational parameters)
-        Returns the increment in the bound acheived"""
+        """
+        Optimises the model parameters (non variational parameters)
+        Returns the increment in the bound acheived
+        """
         if self.size:
             start = self.bound()
             GPy.core.model.Model.optimize(self,**self.hyperparam_opt_args)

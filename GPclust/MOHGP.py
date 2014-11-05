@@ -5,7 +5,7 @@ import numpy as np
 from collapsed_mixture import CollapsedMixture
 import GPy
 from GPy.util.linalg import mdot, pdinv, backsub_both_sides, dpotrs, jitchol, dtrtrs
-from scipy import weave
+from utilities import multiple_mahalanobis
 
 class MOHGP(CollapsedMixture):
     """
@@ -17,13 +17,13 @@ class MOHGP(CollapsedMixture):
 
     Arguments
     =========
-    X - the times of observation of the time series
-    Y - a np.array of the observed time-course values: each row contains a time series, each column represents a uniqui time point
-    kernF - A GPy kernel to model the mean function of each cluster
-    kernY - A GPy kernel to model the deviation of each of the time courses from the mean fro teh cluster
-    alpha - the A priori dirichlet concentrationn parameter
-    prior_Z  - either 'symmetric' or 'dp', specifies whether to use a symmetric dirichelt prior for the clusters, or a (truncated) Dirichlet Process.
-    name - a convenient string for printing the model (default MOHGP)
+    X        - The times of observation of the time series in a (Tx1) np.array
+    Y        - A np.array of the observed time-course values: each row contains a time series, each column represents a uniqui time point
+    kernF    - A GPy kernel to model the mean function of each cluster
+    kernY    - A GPy kernel to model the deviation of each of the time courses from the mean fro teh cluster
+    alpha    - The a priori Dirichlet concentrationn parameter (default 1.)
+    prior_Z  - Either 'symmetric' or 'dp', specifies whether to use a symmetric dirichelt prior for the clusters, or a (truncated) Dirichlet Process.
+    name     - A convenient string for printing the model (default MOHGP)
 
     """
     def __init__(self, X, kernF, kernY, Y, K=2, alpha=1., prior_Z='symmetric', name='MOHGP'):
@@ -66,7 +66,7 @@ class MOHGP(CollapsedMixture):
     def do_computations(self):
         """
         Here we do all the computations that are required whenever the kernels
-        or the varaitional parameters are changed
+        or the variational parameters are changed.
         """
         #sufficient stats.
         self.ybark = np.dot(self.phi.T,self.Y).T
@@ -87,7 +87,7 @@ class MOHGP(CollapsedMixture):
 
     def update_kern_grads(self):
         """
-        set the derivative of the lower bound wrt the (kernel) parameters
+        Set the derivative of the lower bound wrt the (kernel) parameters
         """
 
         tmp = [dtrtrs(L, self.Sy_chol_inv, lower=1)[0] for L in self._C_chols]
@@ -258,71 +258,3 @@ class MOHGP(CollapsedMixture):
             GPy.plotting.matplot_dep.base_plots.align_subplots(Nx,Ny,xlim=(xmin,xmax))
         else:
             ax.set_xlim(xmin,xmax)
-
-def multiple_mahalanobis(X1, X2, L):
-    """
-    X1 is a N1 x D array
-    X2 is a N2 x D array
-    L is a D x D array, lower triangular
-
-    compute (x1_n - x2_m).T * (L * L.T)^-1 * (x1_n - x2_m)
-
-    for each pair of the D_vectors x1_n, x2_m
-
-    Returns: a N1 x N2 array of each distance
-    """
-    N1,D = X1.shape
-    N2,D = X2.shape
-    assert L.shape == (D,D)
-    result = np.zeros(shape=(N1,N2), dtype=np.float64)
-
-    #configure weave for parallel (or not)
-    weave_options_openmp = {'headers'           : ['<omp.h>'],
-                            'extra_compile_args': ['-fopenmp -O3'],
-                            'extra_link_args'   : ['-lgomp'],
-                            'libraries': ['gomp']}
-    weave_options_noopenmp = {'extra_compile_args': ['-O3']}
-
-    if GPy.util.config.config.getboolean('parallel', 'openmp'):
-        weave_options = weave_options_openmp
-        weave_support_code =  """
-        #include <omp.h>
-        #include <math.h>
-        """
-    else:
-        weave_options = weave_options_noopenmp
-        weave_support_code = "#include <math.h>"
-
-    if GPy.util.config.config.getboolean('parallel', 'openmp'):
-        pragma_string = '#pragma omp parallel for private(n,m,i,j,tmp)'
-    else:
-        pragma_string = ''
-
-    code = """
-    double tmp [D];
-    //two loops over the N1 x N2 vectors
-    int n, m, i, j;
-    {pragma}
-    for(n=0; n<N1; n++){{
-      for(m=0; m<N2; m++){{
-
-        //a double loop to solve the cholesy problem into tmp (should really use blas?)
-        for(i=0; i<D; i++){{
-          tmp[i] = X1(n,i) - X2(m,i);
-          for(j=0; j<i; j++){{
-            tmp[i] -= L(i,j)*tmp[j];
-          }}
-          tmp[i] /= L(i,i);
-        }}
-
-        //loop over tmp to get the result: tmp.T * tmp (should really use blas again)
-        for(i=0; i<D; i++){{
-          result(n,m) += tmp[i]*tmp[i];
-        }}
-      }}
-    }}
-    """.format(pragma=pragma_string)
-    weave.inline(code, arg_names=["X1", "X2", "L", "N1", "N2", "D", "result"], type_converters=weave.converters.blitz, support_code=weave_support_code, **weave_options)
-    return result
-
-

@@ -8,7 +8,7 @@ from collapsed_vb import CollapsedVB
 
 class CollapsedMixture(CollapsedVB):
     """
-    A base class for collapsed mixture models based of the col_vb class
+    A base class for collapsed mixture models based on the CollapsedVB class
 
     We inherrit from this to build mixtures of Gaussians, mixures of GPs etc.
 
@@ -21,14 +21,15 @@ class CollapsedMixture(CollapsedVB):
         =========
         N: the number of data
         K: the (initial) number of cluster (or truncation)
-        prior_Z  - either 'symmetric' or 'dp', specifies whether to use a symmetric dirichelt prior for the clusters, or a (truncated) Dirichlet Process.
-        alpha: parameter of the mixing proportion prior
+        prior_Z  - either 'symmetric' or 'DP', specifies whether to use a symmetric Dirichlet prior for the clusters, or a (truncated) Dirichlet Process.
+        alpha: parameter of the Dirichelt (process)
+
         """
         CollapsedVB.__init__(self, name)
         self.N, self.K = N,K
         assert prior_Z in ['symmetric','DP']
         self.prior_Z = prior_Z
-        self.alpha = alpha # TODO: make this a model parameter?
+        self.alpha = alpha
 
         #random initial conditions for the vb parameters
         self.phi_ = np.random.randn(self.N, self.K)
@@ -40,7 +41,9 @@ class CollapsedMixture(CollapsedVB):
             self.phi_tilde = self.phi_tilde_plus_hat - self.phi_hat
 
     def set_vb_param(self,phi_):
-        #unflatten and softmax
+        """
+        Accept a vector representing the variatinoal parameters, and reshape it into self.phi
+        """
         self.phi_ = phi_.reshape(self.N,self.K)
         self.phi, logphi, self.H = softmax_weave(self.phi_)
         self.phi_hat = self.phi.sum(0)
@@ -70,7 +73,8 @@ class CollapsedMixture(CollapsedVB):
 
     def mixing_prop_bound_grad(self):
         """
-        The gradient of the portion of the bound which arises from the mixing proportions, with respect to self.phi
+        The gradient of the portion of the bound which arises from the mixing
+        proportions, with respect to self.phi
         """
         if self.prior_Z=='symmetric':
             return digamma(self.alpha + self.phi_hat)
@@ -83,7 +87,10 @@ class CollapsedMixture(CollapsedVB):
             raise NotImplementedError, "invalid mixing proportion prior type: %s"%self.prior_Z
 
     def reorder(self):
-        """re-order the clusters so that the biggest one is first. This increases the bound if the prior type is a DP"""
+        """
+        Re-order the clusters so that the biggest one is first. This increases
+        the bound if the prior type is a DP.
+        """
         if self.prior_Z=='DP':
             i = np.argsort(self.phi_hat)[::-1]
             self.set_vb_param(self.phi_[:,i])
@@ -98,12 +105,13 @@ class CollapsedMixture(CollapsedVB):
     def try_split(self, indexK=None, threshold=0.9, verbose=True):
         """
         Re-initialize one of the clusters as two clusters, optimize, and keep
-        the solution if the bound is increased. Kernel hypers stay constant.
+        the solution if the bound is increased. Kernel parameters stay constant.
 
         Arguments
         ---------
         indexK: (int) the index of the cluster to split
         threshold: float [0,1], to assign data to the splitting cluster
+        verbose: whether to print status
 
         Returns
         -------
@@ -181,23 +189,3 @@ class CollapsedMixture(CollapsedVB):
                 self.recursive_splits(self.K-1, verbose=verbose)
             self.recursive_splits(k, verbose=verbose)
 
-
-class mix_gradchecker(CollapsedMixture):
-    """only for debugging the gradients of the DP part of the bound"""
-    def check(self,x=None):
-        if x is None:
-            x = np.random.randn(self.N,self.K)
-        self.set_vb_param(x)
-    def do_computations(self):
-        pass
-    def bound(self):
-        return self.mixing_prop_bound() + self.H
-    def vb_grad_natgrad(self):
-        grad_phi =  np.tile(self.mixing_prop_bound_grad(),(self.N,1)) + self.Hgrad
-        natgrad = grad_phi - np.sum(self.phi*grad_phi,1)[:,None]
-        grad = natgrad*self.phi
-        return grad.flatten(), natgrad.flatten()
-
-if __name__=='__main__':
-    m = mix_gradchecker(100,40,'DP',1.0)
-    m.checkgrad_vb()
