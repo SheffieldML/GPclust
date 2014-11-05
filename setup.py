@@ -1,8 +1,4 @@
-import os
 from setuptools import setup
-
-def read(fname):
-    return open(os.path.join(os.path.dirname(__file__), fname)).read()
 
 setup(
     name = "GPclust",
@@ -13,10 +9,8 @@ setup(
     description = ("Clustering of time series using Gaussian processes and variational Bayes"),
     license = "GPL v3",
     keywords = " clustering Gaussian-process machine-learning",
+    download_url = 'https://github.com/jameshensman/gpclust/tarball/0.1',
     packages=['GPclust'],
-    long_description=read('README'),
-    classifiers=[
-        "Topic :: machine learning",
-        "License :: OSI Approved :: GPLv3 License",
-    ],
+    install_requires=['GPy>=0.6'],
+    classifiers=[]
 )

@@ -1,7 +1,9 @@
 GPclust
 =====
 
-Clustering time series using Gaussain processs and Variational Bayes. 
+Clustering time series using Gaussian processs and Variational Bayes. 
+
+User guide and tutorials available from the [homepage.](http://staffwww.dcs.sheffield.ac.uk/people/J.Hensman/gpclust.html)
 
 Currently implemented models are
 
