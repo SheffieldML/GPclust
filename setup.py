@@ -6,14 +6,14 @@ def read(fname):
 
 setup(
     name = "GPclust",
-    version = "1.0.0",
+    version = "0.1.0",
     author = "James Hensman",
     author_email = "james.hensman@sheffield.ac.uk",
-    description = ("Clustering of time series using Gaussian Processes and Variational Bayes"),
+    url = "http://staffwww.dcs.sheffield.ac.uk/people/J.Hensman/gpclust.html",
+    description = ("Clustering of time series using Gaussian processes and variational Bayes"),
     license = "GPL v3",
     keywords = " clustering Gaussian-process machine-learning",
-    url = "http://jameshensman.githubio.GPclust",
-    packages=['src'],
+    packages=['GPclust'],
     long_description=read('README'),
     classifiers=[
         "Topic :: machine learning",
