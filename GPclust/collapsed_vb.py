@@ -79,6 +79,7 @@ class CollapsedVB(GPy.core.Model):
 
         iteration = 0
         bound_old = self.bound()
+        searchDir_old = 0.
         while True:
 
             if callback is not None:
