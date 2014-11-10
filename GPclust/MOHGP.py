@@ -175,7 +175,7 @@ class MOHGP(CollapsedMixture):
         plt.plot(self.Y.T,'k',linewidth=0.5,alpha=0.4)
         plt.plot(self.muk[:,self.phi_hat>1e-3],'k',linewidth=2)
 
-    def plot(self, on_subplots=True, colour=False, newfig=True, errorbars=False, in_a_row=False, joined=True, gpplot=True,min_in_cluster=1e-3, data_in_grey=False, numbered=True, data_in_duplicate=False, fixed_inputs=[]):
+    def plot(self, on_subplots=True, colour=False, newfig=True, errorbars=False, in_a_row=False, joined=True, gpplot=True,min_in_cluster=1e-3, data_in_grey=False, numbered=True, data_in_duplicate=False, fixed_inputs=[], ylim=None):
         """
         Plot the mixture of Gaussian processes. Some of these arguments are rather esoteric! The defaults should be okay for most cases.
 
@@ -193,6 +193,7 @@ class MOHGP(CollapsedMixture):
         numbered    (bool) whether to include numbers on the top-right of each subplot.
         data_in_duplicate (bool) whether to assume the data are in duplicate, and plot the mean of each duplicate instead of each data point
         fixed_inputs (list of tuples, as GPy.GP.plot) for GPs defined on more that one input, we'll plot a slice of the GP. this list defines how to fix the remaining inputs.
+        ylim        (tuple) the limits to set on the y-axes. 
 
         """
 
@@ -217,6 +218,13 @@ class MOHGP(CollapsedMixture):
             Y = self.Y
             X = self.X[:,free_dims]
 
+        #find some sensible y-limits for the plotting
+        if ylim is None:
+            ymin,ymax = Y.min(), Y.max()
+            ymin,ymax = ymin-0.1*(ymax-ymin), ymax+0.1*(ymax-ymin)
+        else:
+            ymin, ymax = ylim
+
         #work out how many clusters we're going to plot.
         Ntotal = np.sum(self.phi_hat > min_in_cluster)
         if on_subplots:
@@ -232,9 +240,8 @@ class MOHGP(CollapsedMixture):
 
         #limits of GPs
         xmin,xmax = X.min(), X.max()
-        ymin,ymax = Y.min(), Y.max()
         xmin,xmax = xmin-0.1*(xmax-xmin), xmax+0.1*(xmax-xmin)
-        ymin,ymax = ymin-0.1*(ymax-ymin), ymax+0.1*(ymax-ymin)
+
         Xgrid = np.empty((300,self.X.shape[1]))
         Xgrid[:,free_dims] = np.linspace(xmin,xmax,300)[:,None]
         for i,v in fixed_inputs:
@@ -274,7 +281,9 @@ class MOHGP(CollapsedMixture):
                 err = 2*np.sqrt(np.diag(self.Lambda_inv[i,:,:]))
                 if errorbars:ax.errorbar(self.X.flatten(), self.muk[:,i], yerr=err,ecolor=col, elinewidth=2, linewidth=0)
 
+                ax.set_ylim(ymin, ymax)
+
         if on_subplots:
-            GPy.plotting.matplot_dep.base_plots.align_subplots(Nx,Ny,xlim=(xmin,xmax))
+            GPy.plotting.matplot_dep.base_plots.align_subplots(Nx,Ny,xlim=(xmin,xmax), ylim=(ymin, ymax))
         else:
             ax.set_xlim(xmin,xmax)
