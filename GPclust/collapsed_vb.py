@@ -152,10 +152,12 @@ class CollapsedVB(GPy.core.Model):
         Optimises the model parameters (non variational parameters)
         Returns the increment in the bound acheived
         """
-        if self.size:
+        if self.optimizer_array.size>0:
             start = self.bound()
             GPy.core.model.Model.optimize(self,**self.hyperparam_opt_args)
             return self.bound()-start
+        else:
+            return 0.
 
 
 
