@@ -18,7 +18,7 @@ class MOHGP(CollapsedMixture):
     Arguments
     =========
     X        - The times of observation of the time series in a (Tx1) np.array
-    Y        - A np.array of the observed time-course values: each row contains a time series, each column represents a uniqui time point
+    Y        - A np.array of the observed time-course values: each row contains a time series, each column represents a unique time point
     kernF    - A GPy kernel to model the mean function of each cluster
     kernY    - A GPy kernel to model the deviation of each of the time courses from the mean fro teh cluster
     alpha    - The a priori Dirichlet concentrationn parameter (default 1.)
@@ -42,7 +42,7 @@ class MOHGP(CollapsedMixture):
         #initialize kernels
         self.Sf = self.kernF.K(self.X)
         self.Sy = self.kernY.K(self.X)
-        self.Sy_inv, self.Sy_chol, self.Sy_chol_inv, self.Sy_logdet = pdinv(self.Sy)
+        self.Sy_inv, self.Sy_chol, self.Sy_chol_inv, self.Sy_logdet = pdinv(self.Sy+np.eye(self.D)*1e-6)
 
         #Computations that can be done outside the optimisation loop
         self.YYT = self.Y[:,:,np.newaxis]*self.Y[:,np.newaxis,:]
@@ -56,7 +56,7 @@ class MOHGP(CollapsedMixture):
         #get the latest kernel matrices, decompose
         self.Sf = self.kernF.K(self.X)
         self.Sy = self.kernY.K(self.X)
-        self.Sy_inv, self.Sy_chol, self.Sy_chol_inv, self.Sy_logdet = pdinv(self.Sy)
+        self.Sy_inv, self.Sy_chol, self.Sy_chol_inv, self.Sy_logdet = pdinv(self.Sy+np.eye(self.D)*1e-6)
 
         #update everything
         self.do_computations()
