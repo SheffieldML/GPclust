@@ -175,7 +175,7 @@ class MOHGP(CollapsedMixture):
         plt.plot(self.Y.T,'k',linewidth=0.5,alpha=0.4)
         plt.plot(self.muk[:,self.phi_hat>1e-3],'k',linewidth=2)
 
-    def plot(self, on_subplots=True, colour=False, newfig=True, errorbars=False, in_a_row=False, joined=True, gpplot=True,min_in_cluster=1e-3, data_in_grey=False, numbered=True, data_in_duplicate=False, fixed_inputs=[], ylim=None):
+    def plot(self, on_subplots=True, colour=False, newfig=True, errorbars=False, in_a_row=False, joined=True, gpplot=True,min_in_cluster=1e-3, data_in_grey=False, numbered=True, data_in_replicate=False, fixed_inputs=[], ylim=None):
         """
         Plot the mixture of Gaussian processes. Some of these arguments are rather esoteric! The defaults should be okay for most cases.
 
@@ -191,7 +191,7 @@ class MOHGP(CollapsedMixture):
         min_in_cluster (float) ignore clusterse with less total assignemnt than this
         data_in_grey (bool) whether the data should be plotted in black and white.
         numbered    (bool) whether to include numbers on the top-right of each subplot.
-        data_in_duplicate (bool) whether to assume the data are in duplicate, and plot the mean of each duplicate instead of each data point
+        data_in_replicate (bool) whether to assume the data are in replicate, and plot the mean of each replicate instead of each data point
         fixed_inputs (list of tuples, as GPy.GP.plot) for GPs defined on more that one input, we'll plot a slice of the GP. this list defines how to fix the remaining inputs.
         ylim        (tuple) the limits to set on the y-axes. 
 
@@ -211,9 +211,11 @@ class MOHGP(CollapsedMixture):
             fig = plt.gcf()
         GPy.plotting.matplot_dep.Tango.reset()
 
-        if data_in_duplicate:
-            X = self.X[::2, free_dims]
-            Y = 0.5*(self.Y[:,:-1:2] + self.Y[:,1::2])
+        if data_in_replicate:
+            X_ = self.X[:, free_dims].flatten()
+            X = np.unique(X_).reshape(-1,1)
+            Y = np.vstack([self.Y[:,X_==x].mean(1) for x in X.flatten()]).T
+
         else:
             Y = self.Y
             X = self.X[:,free_dims]
