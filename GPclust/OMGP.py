@@ -39,11 +39,22 @@ class OMGP(CollapsedMixture):
         Compute the lower bound on the marginal likelihood (conditioned on the
         GP hyper parameters).
         """
-        return  -0.5 * ( \
-                    self.N * self.D * np.log(2. * np.pi) \
-                    + 0 ) \
-                + self.mixing_prop_bound() \
-                + self.H
+        GP_bound = 0.0
+
+        for i, kern in enumerate(self.kern):
+            K = kern.K(self.X)
+            B12 = np.sqrt(np.diag(self.phi[:, i] / self.s2))
+            I = np.eye(self.N)
+            R = jitchol(I + B12.dot(K.dot(B12))).T
+            GP_bound += -0.5 * np.linalg.norm(np.linalg.solve(R, B12.dot(self.Y))) ** 2
+            GP_bound += -self.D * np.trace(np.log(R))
+
+        mixing_bound = self.mixing_prop_bound() + self.H
+        norm_bound = -0.5 * self.D * (self.phi * np.log(2 * np.pi * self.s2)).sum()
+
+        self.GP_bound = GP_bound
+
+        return  GP_bound + mixing_bound + norm_bound
 
     def predict_components(self, Xnew):
         """The predictive density under each component"""
@@ -51,21 +62,13 @@ class OMGP(CollapsedMixture):
         for i, kern in enumerate(self.kern):
             K = kern.K(self.X)
             kx = kern.K(self.X, Xnew)
-
-            # This Cholesky version isn't working... Fix later
-            # I = np.eye(self.N)
-            # B12 = np.sqrt(np.diag(self.phi[:, i] / self.s2))
-            # R = jitchol(I + B12.dot(K.dot(B12)))
-            # B12y = B12.dot(self.Y)
-            # tmp1 = np.linalg.solve(R.T, B12y)
-            # tmp2 = np.linalg.solve(R, tmp1)
-            # mu = kx.T.dot(B12.dot(tmp2))
-
-            # Don't do this due to numerical stability!
-            B_inv = np.diag(1. / (self.phi[:, i] / self.s2))
-            self.K = K
-            self.B_inv = B_inv
-            mu = kx.T.dot(np.linalg.solve((K + B_inv), self.Y))
+            I = np.eye(self.N)
+            B12 = np.sqrt(np.diag(self.phi[:, i] / self.s2))
+            R = jitchol(I + B12.dot(K.dot(B12))).T
+            B12y = B12.dot(self.Y)
+            tmp1 = np.linalg.solve(R.T, B12y)
+            tmp2 = np.linalg.solve(R, tmp1)
+            mu = kx.T.dot(B12.dot(tmp2))
 
             mus.append(mu)
 
