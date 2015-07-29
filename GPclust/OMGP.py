@@ -25,9 +25,7 @@ class OMGP(CollapsedMixture):
 
         CollapsedMixture.__init__(self, N, K, prior_Z, alpha, name)
 
-        # self.do_computations()
-
-    def do_computation(self):
+    def do_computations(self):
         """
         Here we do all the computations that are required whenever the kernels
         or the variational parameters are changed.
@@ -52,24 +50,50 @@ class OMGP(CollapsedMixture):
         mixing_bound = self.mixing_prop_bound() + self.H
         norm_bound = -0.5 * self.D * (self.phi * np.log(2 * np.pi * self.s2)).sum()
 
-        self.GP_bound = GP_bound
-
         return  GP_bound + mixing_bound + norm_bound
+
+    def vb_grad_natgrad(self):
+        """
+        Natural Gradients of the bound with respect to phi, the variational
+        parameters controlling assignment of the data to GPs
+        """
+        ynmk2 = np.zeros_like(self.phi)
+        for i, kern in enumerate(self.kern):
+            K = kern.K(self.X)
+            I = np.eye(self.N)
+            B12 = np.sqrt(np.diag(self.phi[:, i] / self.s2))
+            R = jitchol(I + B12.dot(K.dot(B12))).T
+            muk = np.atleast_2d(self.predict(self.X, i))
+            ynmk2[:, i:(i + 1)] = multiple_mahalanobis(self.Y, muk.T, R)
+
+        grad_phi = (self.mixing_prop_bound_grad() - 
+                     0.0) + \
+                   (self.Hgrad - 0.5 * ynmk2)
+        natgrad = grad_phi - np.sum(self.phi*grad_phi,1)[:,None]
+        grad = natgrad*self.phi
+
+        return grad.flatten(), natgrad.flatten()
+
+    def predict(self, Xnew, i):
+        """ Predictive mean for a given component
+        """
+        kern = self.kern[i]
+        K = kern.K(self.X)
+        kx = kern.K(self.X, Xnew)
+        I = np.eye(self.N)
+        B12 = np.sqrt(np.diag(self.phi[:, i] / self.s2))
+        R = jitchol(I + B12.dot(K.dot(B12))).T
+        B12y = B12.dot(self.Y)
+        tmp1 = np.linalg.solve(R.T, B12y)
+        tmp2 = np.linalg.solve(R, tmp1)
+        mu = kx.T.dot(B12.dot(tmp2))
+        return mu
 
     def predict_components(self, Xnew):
         """The predictive density under each component"""
         mus = []
-        for i, kern in enumerate(self.kern):
-            K = kern.K(self.X)
-            kx = kern.K(self.X, Xnew)
-            I = np.eye(self.N)
-            B12 = np.sqrt(np.diag(self.phi[:, i] / self.s2))
-            R = jitchol(I + B12.dot(K.dot(B12))).T
-            B12y = B12.dot(self.Y)
-            tmp1 = np.linalg.solve(R.T, B12y)
-            tmp2 = np.linalg.solve(R, tmp1)
-            mu = kx.T.dot(B12.dot(tmp2))
-
+        for i in range(len(self.kern)):
+            mu = self.predict(Xnew, i)
             mus.append(mu)
 
-        return np.array(mus)
+        return np.array(mus)[:, :, 0].T
