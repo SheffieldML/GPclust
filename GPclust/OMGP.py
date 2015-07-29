@@ -25,6 +25,8 @@ class OMGP(CollapsedMixture):
 
         CollapsedMixture.__init__(self, N, K, prior_Z, alpha, name)
 
+        self.link_parameters(*self.kern)
+
     def do_computations(self):
         """
         Here we do all the computations that are required whenever the kernels
