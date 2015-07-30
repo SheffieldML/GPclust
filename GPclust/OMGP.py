@@ -27,12 +27,33 @@ class OMGP(CollapsedMixture):
 
         self.link_parameters(*self.kern)
 
+    def parameters_changed(self):
+        """ Set the kernel parameters
+        """
+        self.update_kern_grads()
+
     def do_computations(self):
         """
         Here we do all the computations that are required whenever the kernels
         or the variational parameters are changed.
         """
         pass
+
+    def update_kern_grads(self):
+        """
+        Set the derivative of the lower bound wrt the (kernel) parameters
+        """
+        for i, kern in enumerate(self.kern):
+            K = kern.K(self.X)
+            B_inv = np.diag(1. / (self.phi[:, i] / self.s2))
+
+            # Should work out a ~Cholesky way of doing this due to stability
+            alpha = np.linalg.solve(K + B_inv, self.Y)
+            K_B_inv = pdinv(K + B_inv)[0]
+
+            # Also not completely sure this actually is dL_dK
+            dL_dK = np.outer(alpha, alpha) - K_B_inv
+            kern.update_gradients_full(dL_dK=dL_dK, X=self.X)
 
     def bound(self):
         """
