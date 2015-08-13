@@ -37,7 +37,9 @@ class OMGP(CollapsedMixture):
         Here we do all the computations that are required whenever the kernels
         or the variational parameters are changed.
         """
-        pass
+        if len(self.kern) < self.K:
+            self.kern.append(GPy.kern.RBF(input_dim=1))
+            self.link_parameter(self.kern[-1])
 
     def update_kern_grads(self):
         """
