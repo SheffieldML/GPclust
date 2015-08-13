@@ -103,13 +103,11 @@ class OMGP(CollapsedMixture):
         kern = self.kern[i]
         K = kern.K(self.X)
         kx = kern.K(self.X, Xnew)
-        I = np.eye(self.N)
-        B12 = np.sqrt(np.diag(self.phi[:, i] / self.s2))
-        R = jitchol(I + B12.dot(K.dot(B12))).T
-        B12y = B12.dot(self.Y)
-        tmp1 = np.linalg.solve(R.T, B12y)
-        tmp2 = np.linalg.solve(R, tmp1)
-        mu = kx.T.dot(B12.dot(tmp2))
+
+        # This works but should Cholesky for stability
+        B_inv = np.diag(1. / (self.phi[:, i] / self.s2))
+        mu = kx.T.dot(np.linalg.solve((K + B_inv), self.Y))
+
         return mu
 
     def predict_components(self, Xnew):
