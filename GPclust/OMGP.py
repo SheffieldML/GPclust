@@ -66,11 +66,18 @@ class OMGP(CollapsedMixture):
 
         for i, kern in enumerate(self.kern):
             K = kern.K(self.X)
-            B12 = np.sqrt(np.diag(self.phi[:, i] / self.s2))
-            I = np.eye(self.N)
-            R = jitchol(I + B12.dot(K.dot(B12))).T
-            GP_bound += -0.5 * np.linalg.norm(np.linalg.solve(R, B12.dot(self.Y))) ** 2
-            GP_bound += -self.D * np.trace(np.log(R))
+            B_inv = np.diag(1. / (self.phi[:, i] / self.s2))
+
+            # Data fit, numerically unstable?
+            alpha = np.linalg.solve(K + B_inv, self.Y)
+            GP_bound += -0.5 * np.dot(self.Y.T, alpha)
+
+            # Penalty
+            GP_bound += -0.5 * np.linalg.slogdet(K + B_inv)[1]
+
+            # Constant
+            GP_bound += self.N / 2.0 * np.log(2. * np.pi)
+
 
         mixing_bound = self.mixing_prop_bound() + self.H
         norm_bound = -0.5 * self.D * (self.phi * np.log(2 * np.pi * self.s2)).sum()
@@ -87,15 +94,21 @@ class OMGP(CollapsedMixture):
             K = kern.K(self.X)
             I = np.eye(self.N)
             B12 = np.sqrt(np.diag(self.phi[:, i] / self.s2))
-            R = jitchol(I + B12.dot(K.dot(B12))).T
+
+            # R = jitchol(I + B12.dot(K.dot(B12))).T
+
+            B_inv = np.diag(1. / (self.phi[:, i] / self.s2))            
+            R = jitchol((K + B_inv)).T
+
             muk = np.atleast_2d(self.predict(self.X, i))
             ynmk2[:, i:(i + 1)] = multiple_mahalanobis(self.Y, muk.T, R)
 
         grad_phi = (self.mixing_prop_bound_grad() - 
                      0.0) + \
                    (self.Hgrad - 0.5 * ynmk2)
-        natgrad = grad_phi - np.sum(self.phi*grad_phi,1)[:,None]
-        grad = natgrad*self.phi
+
+        natgrad = grad_phi - np.sum(self.phi * grad_phi, 1)[:, None]
+        grad = natgrad * self.phi
 
         return grad.flatten(), natgrad.flatten()
 

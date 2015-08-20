@@ -26,7 +26,7 @@ class CollapsedMixture(CollapsedVB):
 
         """
         CollapsedVB.__init__(self, name)
-        self.N, self.K = N,K
+        self.N, self.K = N, K
         assert prior_Z in ['symmetric','DP']
         self.prior_Z = prior_Z
         self.alpha = alpha
@@ -69,7 +69,7 @@ class CollapsedMixture(CollapsedVB):
             D = self.K*(gammaln(1.+self.alpha) - gammaln(self.alpha))
             return A.sum() + B.sum() - C.sum() + D
         else:
-            raise NotImplementedError, "invalid mixing proportion prior type: %s"%self.prior_Z
+            raise NotImplementedError, "invalid mixing proportion prior type: %s" % self.prior_Z
 
     def mixing_prop_bound_grad(self):
         """
