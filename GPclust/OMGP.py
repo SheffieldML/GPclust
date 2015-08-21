@@ -6,6 +6,7 @@ from collapsed_mixture import CollapsedMixture
 import GPy
 from GPy.util.linalg import mdot, pdinv, backsub_both_sides, dpotrs, jitchol, dtrtrs
 from utilities import multiple_mahalanobis
+from scipy import linalg
 
 class OMGP(CollapsedMixture):
     """ OMGP Model
@@ -51,6 +52,8 @@ class OMGP(CollapsedMixture):
 
             # Should work out a ~Cholesky way of doing this due to stability
             alpha = np.linalg.solve(K + B_inv, self.Y)
+            # alpha = linalg.cho_solve(linalg.cho_factor(K + B_inv), self.Y)
+            # Even unstabler...
             K_B_inv = pdinv(K + B_inv)[0]
 
             # Also not completely sure this actually is dL_dK
@@ -69,18 +72,24 @@ class OMGP(CollapsedMixture):
             B_inv = np.diag(1. / (self.phi[:, i] / self.s2))
 
             # Data fit, numerically unstable?
+
+            # alpha = linalg.cho_solve(linalg.cho_factor(K + B_inv), self.Y)
+            # Cholesky version fails due to containing inf or nan!
+
             alpha = np.linalg.solve(K + B_inv, self.Y)
             GP_bound += -0.5 * np.dot(self.Y.T, alpha)
 
             # Penalty
             GP_bound += -0.5 * np.linalg.slogdet(K + B_inv)[1]
 
-            # Constant
-            GP_bound += self.N / 2.0 * np.log(2. * np.pi)
+            # Constant, weighted by  model assignment per point
+            # GP_bound += self.N / 2.0 * np.log(2. * np.pi)
+            GP_bound += -0.5 * (self.phi[:, i] * np.log(2 * np.pi * self.s2)).sum()
 
 
         mixing_bound = self.mixing_prop_bound() + self.H
-        norm_bound = -0.5 * self.D * (self.phi * np.log(2 * np.pi * self.s2)).sum()
+        # norm_bound = -0.5 * self.D * (self.phi * np.log(2 * np.pi * self.s2)).sum()
+        norm_bound = 0.
 
         return  GP_bound + mixing_bound + norm_bound
 
@@ -89,23 +98,28 @@ class OMGP(CollapsedMixture):
         Natural Gradients of the bound with respect to phi, the variational
         parameters controlling assignment of the data to GPs
         """
-        ynmk2 = np.zeros_like(self.phi)
+        grad_Lm = np.zeros_like(self.phi)
         for i, kern in enumerate(self.kern):
             K = kern.K(self.X)
             I = np.eye(self.N)
-            B12 = np.sqrt(np.diag(self.phi[:, i] / self.s2))
 
-            # R = jitchol(I + B12.dot(K.dot(B12))).T
-
-            B_inv = np.diag(1. / (self.phi[:, i] / self.s2))            
+            B_inv = np.diag(1. / (self.phi[:, i] / self.s2))
             R = jitchol((K + B_inv)).T
 
             muk = np.atleast_2d(self.predict(self.X, i))
-            ynmk2[:, i:(i + 1)] = multiple_mahalanobis(self.Y, muk.T, R)
 
-        grad_phi = (self.mixing_prop_bound_grad() - 
-                     0.0) + \
-                   (self.Hgrad - 0.5 * ynmk2)
+            alpha = np.linalg.solve(K + B_inv, self.Y)
+            K_B_inv = pdinv(K + B_inv)[0]
+            dL_dB = np.outer(alpha, alpha) - K_B_inv
+
+            for n in range(self.phi.shape[0]):
+                grad_B_inv = np.zeros_like(B_inv)
+                grad_B_inv[n, n] = -self.s2 / (self.phi[n, i] ** 2)
+                grad_Lm[n, i] = 0.5 * np.trace(np.dot(dL_dB, grad_B_inv))
+
+        grad_phi = (self.mixing_prop_bound_grad() + 
+                     grad_Lm) + \
+                   (self.Hgrad)
 
         natgrad = grad_phi - np.sum(self.phi * grad_phi, 1)[:, None]
         grad = natgrad * self.phi

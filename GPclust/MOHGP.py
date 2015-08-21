@@ -135,13 +135,14 @@ class MOHGP(CollapsedMixture):
         Natural Gradients of the bound with respect to phi, the variational
         parameters controlling assignment of the data to clusters
         """
-        #yn_mk = self.Y[:,:,None]-self.muk[None,:,:]
-        #ynmk2 = np.sum(np.dot(self.Sy_inv,yn_mk)*np.rollaxis(yn_mk,0,2),0)
+        #yn_mk = self.Y[:,:,None] - self.muk[None,:,:]
+        #ynmk2 = np.sum(np.dot(self.Sy_inv, yn_mk) * np.rollaxis(yn_mk,0,2),0)
         ynmk2 = multiple_mahalanobis(self.Y, self.muk.T, self.Sy_chol)
 
         grad_phi = (self.mixing_prop_bound_grad() -
-                    0.5*np.sum(np.sum(self.Lambda_inv*self.Sy_inv[None,:,:],1),1)) + \
-                   ( self.Hgrad - 0.5*ynmk2 ) # parentheses are for operation ordering!
+                    0.5 * np.sum(np.sum(self.Lambda_inv * self.Sy_inv[None, :, :], 1), 1)) + \
+                   ( self.Hgrad - 0.5 * ynmk2 ) # parentheses are for operation ordering!
+
         natgrad = grad_phi - np.sum(self.phi*grad_phi,1)[:,None]
         grad = natgrad*self.phi
 

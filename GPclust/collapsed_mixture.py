@@ -36,7 +36,7 @@ class CollapsedMixture(CollapsedVB):
         self.phi, logphi, self.H = softmax_weave(self.phi_)
         self.phi_hat = self.phi.sum(0)
         self.Hgrad = -logphi
-        if self.prior_Z=='DP':
+        if self.prior_Z == 'DP':
             self.phi_tilde_plus_hat = self.phi_hat[::-1].cumsum()[::-1]
             self.phi_tilde = self.phi_tilde_plus_hat - self.phi_hat
 
@@ -44,13 +44,14 @@ class CollapsedMixture(CollapsedVB):
         """
         Accept a vector representing the variatinoal parameters, and reshape it into self.phi
         """
-        self.phi_ = phi_.reshape(self.N,self.K)
+        self.phi_ = phi_.reshape(self.N, self.K)
         self.phi, logphi, self.H = softmax_weave(self.phi_)
         self.phi_hat = self.phi.sum(0)
         self.Hgrad = -logphi
-        if self.prior_Z=='DP':
+        if self.prior_Z == 'DP':
             self.phi_tilde_plus_hat = self.phi_hat[::-1].cumsum()[::-1]
             self.phi_tilde = self.phi_tilde_plus_hat - self.phi_hat
+
         self.do_computations()
 
     def get_vb_param(self):
@@ -80,9 +81,9 @@ class CollapsedMixture(CollapsedVB):
             return digamma(self.alpha + self.phi_hat)
         elif self.prior_Z=='DP':
             A = digamma(self.phi_hat + 1.)
-            B = np.hstack((0,digamma(self.phi_tilde+self.alpha)[:-1].cumsum()))
-            C = digamma(self.phi_tilde_plus_hat +self.alpha+ 1.).cumsum()
-            return A+B-C
+            B = np.hstack((0, digamma(self.phi_tilde + self.alpha)[:-1].cumsum()))
+            C = digamma(self.phi_tilde_plus_hat + self.alpha + 1.).cumsum()
+            return A + B - C
         else:
             raise NotImplementedError, "invalid mixing proportion prior type: %s"%self.prior_Z
 
