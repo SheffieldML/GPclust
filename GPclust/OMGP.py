@@ -71,27 +71,18 @@ class OMGP(CollapsedMixture):
             K = kern.K(self.X)
             B_inv = np.diag(1. / (self.phi[:, i] / self.s2))
 
-            # Data fit, numerically unstable?
+            # Data fit
+            alpha = linalg.cho_solve(linalg.cho_factor(K + B_inv), self.Y)
 
-            # alpha = linalg.cho_solve(linalg.cho_factor(K + B_inv), self.Y)
-            # Cholesky version fails due to containing inf or nan!
-
-            alpha = np.linalg.solve(K + B_inv, self.Y)
             GP_bound += -0.5 * np.dot(self.Y.T, alpha)
 
             # Penalty
             GP_bound += -0.5 * np.linalg.slogdet(K + B_inv)[1]
 
             # Constant, weighted by  model assignment per point
-            # GP_bound += self.N / 2.0 * np.log(2. * np.pi)
             GP_bound += -0.5 * (self.phi[:, i] * np.log(2 * np.pi * self.s2)).sum()
 
-
-        mixing_bound = self.mixing_prop_bound() + self.H
-        # norm_bound = -0.5 * self.D * (self.phi * np.log(2 * np.pi * self.s2)).sum()
-        norm_bound = 0.
-
-        return  GP_bound + mixing_bound + norm_bound
+        return  GP_bound + self.mixing_prop_bound() + self.H
 
     def vb_grad_natgrad(self):
         """
@@ -104,7 +95,6 @@ class OMGP(CollapsedMixture):
             I = np.eye(self.N)
 
             B_inv = np.diag(1. / (self.phi[:, i] / self.s2))
-            R = jitchol((K + B_inv)).T
 
             muk = np.atleast_2d(self.predict(self.X, i))
 
