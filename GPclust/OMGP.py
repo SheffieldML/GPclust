@@ -50,14 +50,12 @@ class OMGP(CollapsedMixture):
             K = kern.K(self.X)
             B_inv = np.diag(1. / (self.phi[:, i] / self.s2))
 
-            # Should work out a ~Cholesky way of doing this due to stability
-            alpha = np.linalg.solve(K + B_inv, self.Y)
-            # alpha = linalg.cho_solve(linalg.cho_factor(K + B_inv), self.Y)
-            # Even unstabler...
+            alpha = linalg.cho_solve(linalg.cho_factor(K + B_inv), self.Y)
             K_B_inv = pdinv(K + B_inv)[0]
 
             # Also not completely sure this actually is dL_dK
             dL_dK = np.outer(alpha, alpha) - K_B_inv
+
             kern.update_gradients_full(dL_dK=dL_dK, X=self.X)
 
     def bound(self):
@@ -95,9 +93,6 @@ class OMGP(CollapsedMixture):
             I = np.eye(self.N)
 
             B_inv = np.diag(1. / (self.phi[:, i] / self.s2))
-
-            muk = np.atleast_2d(self.predict(self.X, i))
-
             alpha = np.linalg.solve(K + B_inv, self.Y)
             K_B_inv = pdinv(K + B_inv)[0]
             dL_dB = np.outer(alpha, alpha) - K_B_inv
@@ -107,9 +102,7 @@ class OMGP(CollapsedMixture):
                 grad_B_inv[n, n] = -self.s2 / (self.phi[n, i] ** 2)
                 grad_Lm[n, i] = 0.5 * np.trace(np.dot(dL_dB, grad_B_inv))
 
-        grad_phi = (self.mixing_prop_bound_grad() + 
-                     grad_Lm) + \
-                   (self.Hgrad)
+        grad_phi = grad_Lm + self.mixing_prop_bound_grad() + self.Hgrad
 
         natgrad = grad_phi - np.sum(self.phi * grad_phi, 1)[:, None]
         grad = natgrad * self.phi
