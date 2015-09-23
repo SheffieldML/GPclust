@@ -67,7 +67,7 @@ class OMGP(CollapsedMixture):
 
         for i, kern in enumerate(self.kern):
             K = kern.K(self.X)
-            B_inv = np.diag(1. / (self.phi[:, i] / self.s2))
+            B_inv = np.diag(1. / ((self.phi[:, i]+1e-6) / self.s2))
 
             # Data fit
             alpha = linalg.cho_solve(linalg.cho_factor(K + B_inv), self.Y)
@@ -92,14 +92,14 @@ class OMGP(CollapsedMixture):
             K = kern.K(self.X)
             I = np.eye(self.N)
 
-            B_inv = np.diag(1. / (self.phi[:, i] / self.s2))
+            B_inv = np.diag(1. / ((self.phi[:, i]+1e-6) / self.s2))
             alpha = np.linalg.solve(K + B_inv, self.Y)
             K_B_inv = pdinv(K + B_inv)[0]
             dL_dB = np.outer(alpha, alpha) - K_B_inv
 
             for n in range(self.phi.shape[0]):
                 grad_B_inv = np.zeros_like(B_inv)
-                grad_B_inv[n, n] = -self.s2 / (self.phi[n, i] ** 2)
+                grad_B_inv[n, n] = -self.s2 / (self.phi[n, i] ** 2 + 1e-6)
                 grad_Lm[n, i] = 0.5 * np.trace(np.dot(dL_dB, grad_B_inv))
 
         grad_phi = grad_Lm + self.mixing_prop_bound_grad() + self.Hgrad
