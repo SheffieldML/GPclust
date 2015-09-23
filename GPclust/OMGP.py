@@ -17,16 +17,16 @@ class OMGP(CollapsedMixture):
         self.Y = Y
         self.X = X
 
-        self.s2 = 1.
-
         if kernels == None:
             self.kern = []
             for i in range(K):
                 self.kern.append(GPy.kern.RBF(input_dim=1))
 
         CollapsedMixture.__init__(self, N, K, prior_Z, alpha, name)
-
+        
+        self.link_parameter(GPy.core.parameterization.param.Param('variance', 0.01))
         self.link_parameters(*self.kern)
+
 
     def parameters_changed(self):
         """ Set the kernel parameters
@@ -48,7 +48,7 @@ class OMGP(CollapsedMixture):
         """
         for i, kern in enumerate(self.kern):
             K = kern.K(self.X)
-            B_inv = np.diag(1. / (self.phi[:, i] / self.s2))
+            B_inv = np.diag(1. / (self.phi[:, i] / self.variance))
 
             alpha = linalg.cho_solve(linalg.cho_factor(K + B_inv), self.Y)
             K_B_inv = pdinv(K + B_inv)[0]
@@ -67,7 +67,7 @@ class OMGP(CollapsedMixture):
 
         for i, kern in enumerate(self.kern):
             K = kern.K(self.X)
-            B_inv = np.diag(1. / ((self.phi[:, i]+1e-6) / self.s2))
+            B_inv = np.diag(1. / ((self.phi[:, i]+1e-6) / self.variance))
 
             # Data fit
             alpha = linalg.cho_solve(linalg.cho_factor(K + B_inv), self.Y)
@@ -78,7 +78,7 @@ class OMGP(CollapsedMixture):
             GP_bound += -0.5 * np.linalg.slogdet(K + B_inv)[1]
 
             # Constant, weighted by  model assignment per point
-            GP_bound += -0.5 * (self.phi[:, i] * np.log(2 * np.pi * self.s2)).sum()
+            GP_bound += -0.5 * (self.phi[:, i] * np.log(2 * np.pi * self.variance)).sum()
 
         return  GP_bound + self.mixing_prop_bound() + self.H
 
@@ -92,14 +92,14 @@ class OMGP(CollapsedMixture):
             K = kern.K(self.X)
             I = np.eye(self.N)
 
-            B_inv = np.diag(1. / ((self.phi[:, i]+1e-6) / self.s2))
+            B_inv = np.diag(1. / ((self.phi[:, i]+1e-6) / self.variance))
             alpha = np.linalg.solve(K + B_inv, self.Y)
             K_B_inv = pdinv(K + B_inv)[0]
             dL_dB = np.outer(alpha, alpha) - K_B_inv
 
             for n in range(self.phi.shape[0]):
                 grad_B_inv = np.zeros_like(B_inv)
-                grad_B_inv[n, n] = -self.s2 / (self.phi[n, i] ** 2 + 1e-6)
+                grad_B_inv[n, n] = -self.variance / (self.phi[n, i] ** 2 + 1e-6)
                 grad_Lm[n, i] = 0.5 * np.trace(np.dot(dL_dB, grad_B_inv))
 
         grad_phi = grad_Lm + self.mixing_prop_bound_grad() + self.Hgrad
@@ -117,7 +117,7 @@ class OMGP(CollapsedMixture):
         kx = kern.K(self.X, Xnew)
 
         # This works but should Cholesky for stability
-        B_inv = np.diag(1. / (self.phi[:, i] / self.s2))
+        B_inv = np.diag(1. / (self.phi[:, i] / self.variance))
         mu = kx.T.dot(np.linalg.solve((K + B_inv), self.Y))
 
         return mu
