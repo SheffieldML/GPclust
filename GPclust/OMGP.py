@@ -21,10 +21,12 @@ class OMGP(CollapsedMixture):
             self.kern = []
             for i in range(K):
                 self.kern.append(GPy.kern.RBF(input_dim=1))
+        else:
+            self.kern = kernels
 
         CollapsedMixture.__init__(self, N, K, prior_Z, alpha, name)
         
-        self.link_parameter(GPy.core.parameterization.param.Param('variance', 0.01))
+        self.link_parameter(GPy.core.parameterization.param.Param('variance', 0.01, GPy.core.parameterization.transformations.Logexp()))
         self.link_parameters(*self.kern)
 
 
@@ -53,10 +55,26 @@ class OMGP(CollapsedMixture):
             alpha = linalg.cho_solve(linalg.cho_factor(K + B_inv), self.Y)
             K_B_inv = pdinv(K + B_inv)[0]
 
-            # Also not completely sure this actually is dL_dK
             dL_dK = np.outer(alpha, alpha) - K_B_inv
 
             kern.update_gradients_full(dL_dK=dL_dK, X=self.X)
+
+        # variance gradient
+
+        grad_Lm_variance = 0.0
+        for i, kern in enumerate(self.kern):
+            K = kern.K(self.X)
+            I = np.eye(self.N)
+
+            B_inv = np.diag(1. / ((self.phi[:, i] + 1e-6) / self.variance))
+            alpha = np.linalg.solve(K + B_inv, self.Y)
+            K_B_inv = pdinv(K + B_inv)[0]
+            dL_dB = np.outer(alpha, alpha) - K_B_inv
+            grad_B_inv = np.diag(1. / (self.phi[:, i] + 1e-6))
+
+            grad_Lm_variance += 0.5 * np.trace(np.dot(dL_dB, grad_B_inv))
+
+            self.variance.gradient = grad_Lm_variance
 
     def bound(self):
         """
@@ -67,7 +85,7 @@ class OMGP(CollapsedMixture):
 
         for i, kern in enumerate(self.kern):
             K = kern.K(self.X)
-            B_inv = np.diag(1. / ((self.phi[:, i]+1e-6) / self.variance))
+            B_inv = np.diag(1. / ((self.phi[:, i] + 1e-6) / self.variance))
 
             # Data fit
             alpha = linalg.cho_solve(linalg.cho_factor(K + B_inv), self.Y)
@@ -92,7 +110,7 @@ class OMGP(CollapsedMixture):
             K = kern.K(self.X)
             I = np.eye(self.N)
 
-            B_inv = np.diag(1. / ((self.phi[:, i]+1e-6) / self.variance))
+            B_inv = np.diag(1. / ((self.phi[:, i] + 1e-6) / self.variance))
             alpha = np.linalg.solve(K + B_inv, self.Y)
             K_B_inv = pdinv(K + B_inv)[0]
             dL_dB = np.outer(alpha, alpha) - K_B_inv
