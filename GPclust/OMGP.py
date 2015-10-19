@@ -134,17 +134,24 @@ class OMGP(CollapsedMixture):
         K = kern.K(self.X)
         kx = kern.K(self.X, Xnew)
 
+        # Predict mean
         # This works but should Cholesky for stability
         B_inv = np.diag(1. / (self.phi[:, i] / self.variance))
         mu = kx.T.dot(np.linalg.solve((K + B_inv), self.Y))
 
-        return mu
+        # Predict variance
+        kxx = kern.K(Xnew, Xnew)
+        va = self.variance + kxx - kx.T.dot(np.linalg.solve((K + B_inv), kx))
+
+        return mu, va
 
     def predict_components(self, Xnew):
         """The predictive density under each component"""
         mus = []
+        vas = []
         for i in range(len(self.kern)):
-            mu = self.predict(Xnew, i)
+            mu, va = self.predict(Xnew, i)
             mus.append(mu)
+            vas.append(va)
 
-        return np.array(mus)[:, :, 0].T
+        return np.array(mus)[:, :, 0].T, np.array(vas)[:, :, 0].T
