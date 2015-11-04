@@ -41,8 +41,14 @@ class OMGP(CollapsedMixture):
         or the variational parameters are changed.
         """
         if len(self.kern) < self.K:
-            self.kern.append(GPy.kern.RBF(input_dim=1))
+            self.kern.append(self.kern[-1].copy())
             self.link_parameter(self.kern[-1])
+
+        if len(self.kern) > self.K:
+            for kern in self.kern[self.K:]:
+                self.unlink_parameter(kern)
+
+            self.kern = self.kern[:self.K]
 
     def update_kern_grads(self):
         """
