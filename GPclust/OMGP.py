@@ -11,7 +11,7 @@ from scipy import linalg
 class OMGP(CollapsedMixture):
     """ OMGP Model
     """
-    def __init__(self, X, Y, K=2, kernels=None, alpha=1., prior_Z='symmetric', name='OMGP'):
+    def __init__(self, X, Y, K=2, kernels=None, variance=1., alpha=1., prior_Z='symmetric', name='OMGP'):
 
         N, self.D = Y.shape
         self.Y = Y
@@ -26,7 +26,7 @@ class OMGP(CollapsedMixture):
 
         CollapsedMixture.__init__(self, N, K, prior_Z, alpha, name)
         
-        self.link_parameter(GPy.core.parameterization.param.Param('variance', 0.01, GPy.core.parameterization.transformations.Logexp()))
+        self.link_parameter(GPy.core.parameterization.param.Param('variance', variance, GPy.core.parameterization.transformations.Logexp()))
         self.link_parameters(*self.kern)
 
 
@@ -161,3 +161,37 @@ class OMGP(CollapsedMixture):
             vas.append(va)
 
         return np.array(mus)[:, :, 0].T, np.array(vas)[:, :, 0].T
+
+    def plot(self, gp_num=0):
+        """
+        Plot the mixture of Gaussian Processes.
+        """
+        from matplotlib import pylab as plt
+        from matplotlib import cm
+
+        XX = np.linspace(self.X.min(), self.X.max())[:, None]
+
+        YY_mu, YY_var = self.predict_components(XX)
+
+        plt.scatter(self.X, self.Y, c=self.phi[:, gp_num], cmap=cm.RdBu, vmin=0., vmax=1., lw=0.5)
+        plt.colorbar(label='GP {} assignment probability'.format(gp_num))
+
+        GPy.plotting.matplot_dep.Tango.reset()
+
+        for i in range(self.phi.shape[1]):
+            col = GPy.plotting.matplot_dep.Tango.nextMedium()
+            plt.fill_between(XX[:, 0],
+                             YY_mu[:, i] - 2 * np.sqrt(YY_var[:, i]),
+                             YY_mu[:, i] + 2 * np.sqrt(YY_var[:, i]),
+                             alpha=0.1,
+                             facecolor=col)
+            plt.plot(XX, YY_mu[:, i], c=col, lw=2);
+
+    def plot_probs(self, gp_num=0):
+        """
+        Plot assignment probabilities for each data point of the OMGP model
+        """
+        from matplotlib import pylab as plt
+        plt.scatter(self.X, self.phi[:, gp_num])
+        plt.ylim(-0.1, 1.1)
+        plt.ylabel('GP {} assignment probability'.format(gp_num))
