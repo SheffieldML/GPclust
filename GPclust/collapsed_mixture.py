@@ -26,7 +26,7 @@ class CollapsedMixture(CollapsedVB):
 
         """
         CollapsedVB.__init__(self, name)
-        self.N, self.K = N,K
+        self.N, self.K = N, K
         assert prior_Z in ['symmetric','DP']
         self.prior_Z = prior_Z
         self.alpha = alpha
@@ -36,7 +36,7 @@ class CollapsedMixture(CollapsedVB):
         self.phi, logphi, self.H = softmax_weave(self.phi_)
         self.phi_hat = self.phi.sum(0)
         self.Hgrad = -logphi
-        if self.prior_Z=='DP':
+        if self.prior_Z == 'DP':
             self.phi_tilde_plus_hat = self.phi_hat[::-1].cumsum()[::-1]
             self.phi_tilde = self.phi_tilde_plus_hat - self.phi_hat
 
@@ -44,13 +44,14 @@ class CollapsedMixture(CollapsedVB):
         """
         Accept a vector representing the variatinoal parameters, and reshape it into self.phi
         """
-        self.phi_ = phi_.reshape(self.N,self.K)
+        self.phi_ = phi_.reshape(self.N, self.K)
         self.phi, logphi, self.H = softmax_weave(self.phi_)
         self.phi_hat = self.phi.sum(0)
         self.Hgrad = -logphi
-        if self.prior_Z=='DP':
+        if self.prior_Z == 'DP':
             self.phi_tilde_plus_hat = self.phi_hat[::-1].cumsum()[::-1]
             self.phi_tilde = self.phi_tilde_plus_hat - self.phi_hat
+
         self.do_computations()
 
     def get_vb_param(self):
@@ -69,7 +70,7 @@ class CollapsedMixture(CollapsedVB):
             D = self.K*(gammaln(1.+self.alpha) - gammaln(self.alpha))
             return A.sum() + B.sum() - C.sum() + D
         else:
-            raise NotImplementedError, "invalid mixing proportion prior type: %s"%self.prior_Z
+            raise NotImplementedError, "invalid mixing proportion prior type: %s" % self.prior_Z
 
     def mixing_prop_bound_grad(self):
         """
@@ -80,9 +81,9 @@ class CollapsedMixture(CollapsedVB):
             return digamma(self.alpha + self.phi_hat)
         elif self.prior_Z=='DP':
             A = digamma(self.phi_hat + 1.)
-            B = np.hstack((0,digamma(self.phi_tilde+self.alpha)[:-1].cumsum()))
-            C = digamma(self.phi_tilde_plus_hat +self.alpha+ 1.).cumsum()
-            return A+B-C
+            B = np.hstack((0, digamma(self.phi_tilde + self.alpha)[:-1].cumsum()))
+            C = digamma(self.phi_tilde_plus_hat + self.alpha + 1.).cumsum()
+            return A + B - C
         else:
             raise NotImplementedError, "invalid mixing proportion prior type: %s"%self.prior_Z
 
@@ -102,7 +103,7 @@ class CollapsedMixture(CollapsedVB):
         self.K = i.sum()
         self.set_vb_param(phi_)
 
-    def try_split(self, indexK=None, threshold=0.9, verbose=True):
+    def try_split(self, indexK=None, threshold=0.9, verbose=True, maxiter=100, optimize_params=None):
         """
         Re-initialize one of the clusters as two clusters, optimize, and keep
         the solution if the bound is increased. Kernel parameters stay constant.
@@ -133,6 +134,7 @@ class CollapsedMixture(CollapsedVB):
 
         bound_old = self.bound()
         phi_old = self.get_vb_param().copy()
+        self._optimizer_copy_transformed = False  # Redo transform in case parameters have been unlinked
         param_old = self.optimizer_array.copy()
         old_K = self.K
 
@@ -155,7 +157,7 @@ class CollapsedMixture(CollapsedVB):
         self.set_vb_param(self.get_vb_param())
 
 
-        self.optimize(maxiter=100, verbose=verbose)
+        self.optimize(maxiter=maxiter, verbose=verbose)
         self.remove_empty_clusters()
         bound_new = self.bound()
 
@@ -164,12 +166,19 @@ class CollapsedMixture(CollapsedVB):
             self.K = old_K
             self.set_vb_param(phi_old)
             self.optimizer_array = param_old
-            if verbose:print "split failed, bound changed by: ",bound_increase, '(K=%s)'%self.K
+            if verbose:print "split failed, bound changed by: ",bound_increase, '(K=%s)' % self.K
+
             return False
+
         else:
-            if verbose:print "split suceeded, bound changed by: ",bound_increase, ',',self.K-old_K,' new clusters', '(K=%s)'%self.K
+            if verbose:print "split suceeded, bound changed by: ", bound_increase, ',', self.K-old_K,' new clusters', '(K=%s)' % self.K
             if verbose:print "optimizing new split to convergence:"
-            self.optimize(maxiter=5000, verbose=verbose)
+            if optimize_params:
+                self.optimize(**optimize_params)
+
+            else:
+                self.optimize(maxiter=5000, verbose=verbose)
+
             return True
 
     def systematic_splits(self, verbose=True):
@@ -179,13 +188,13 @@ class CollapsedMixture(CollapsedVB):
         for kk in range(self.K):
             self.recursive_splits(kk, verbose=verbose)
 
-    def recursive_splits(self,k=0, verbose=True):
+    def recursive_splits(self,k=0, verbose=True, optimize_params=None):
         """
         A recursive function which attempts to split a cluster (indexed by k), and if sucessful attempts to split the resulting clusters
         """
-        success = self.try_split(k, verbose=verbose)
+        success = self.try_split(k, verbose=verbose, optimize_params=optimize_params)
         if success:
             if not k==(self.K-1):
-                self.recursive_splits(self.K-1, verbose=verbose)
-            self.recursive_splits(k, verbose=verbose)
+                self.recursive_splits(self.K-1, verbose=verbose, optimize_params=optimize_params)
+            self.recursive_splits(k, verbose=verbose, optimize_params=optimize_params)
 

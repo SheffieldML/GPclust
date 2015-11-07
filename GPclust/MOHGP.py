@@ -28,7 +28,7 @@ class MOHGP(CollapsedMixture):
     """
     def __init__(self, X, kernF, kernY, Y, K=2, alpha=1., prior_Z='symmetric', name='MOHGP'):
 
-        N,self.D = Y.shape
+        N, self.D = Y.shape
         self.Y = Y
         self.X = X
         assert X.shape[0]==self.D, "input data don't match observations"
@@ -110,7 +110,7 @@ class MOHGP(CollapsedMixture):
         Byks = [np.dot(Bi,yk) for Bi,yk in zip(B_invs,self.ybark.T)]
         tmp = sum([np.dot(Byk[:,None],Byk[None,:])/np.power(ph_k,3)\
                 -Syi_ybarkybarkT_Syi/ph_k -Bi/ph_k for Bi, Byk, yyT, ph_k, Syi_ybarkybarkT_Syi in zip(B_invs, Byks, ybarkybarkT, self.phi_hat, self.Syi_ybarkybarkT_Syi) if ph_k >1e-6])
-        tmp += (self.K-self.N)*self.Sy_inv
+        tmp += (self.K - self.N) * self.Sy_inv
         tmp += mdot(self.Sy_inv,self.YTY,self.Sy_inv)
         tmp /= 2.
 
@@ -122,26 +122,27 @@ class MOHGP(CollapsedMixture):
         Compute the lower bound on the marginal likelihood (conditioned on the
         GP hyper parameters).
         """
-        return -0.5*(self.N*self.D*np.log(2.*np.pi)\
-                + self.log_det_diff.sum()\
-                + self.N*self.Sy_logdet\
-                + np.sum(self.YTY*self.Sy_inv))\
-                + 0.5*np.sum(self.Syi_ybarkybarkT_Syi*self.Lambda_inv)\
-                + self.mixing_prop_bound()\
-                + self.H
+        return -0.5 * ( self.N * self.D * np.log(2. * np.pi) \
+                        + self.log_det_diff.sum() \
+                        + self.N * self.Sy_logdet \
+                        + np.sum(self.YTY * self.Sy_inv) ) \
+               + 0.5 * np.sum(self.Syi_ybarkybarkT_Syi * self.Lambda_inv) \
+               + self.mixing_prop_bound() \
+               + self.H
 
     def vb_grad_natgrad(self):
         """
         Natural Gradients of the bound with respect to phi, the variational
         parameters controlling assignment of the data to clusters
         """
-        #yn_mk = self.Y[:,:,None]-self.muk[None,:,:]
-        #ynmk2 = np.sum(np.dot(self.Sy_inv,yn_mk)*np.rollaxis(yn_mk,0,2),0)
+        #yn_mk = self.Y[:,:,None] - self.muk[None,:,:]
+        #ynmk2 = np.sum(np.dot(self.Sy_inv, yn_mk) * np.rollaxis(yn_mk,0,2),0)
         ynmk2 = multiple_mahalanobis(self.Y, self.muk.T, self.Sy_chol)
 
         grad_phi = (self.mixing_prop_bound_grad() -
-                    0.5*np.sum(np.sum(self.Lambda_inv*self.Sy_inv[None,:,:],1),1)) + \
-                   ( self.Hgrad - 0.5*ynmk2 ) # parentheses are for operation ordering!
+                    0.5 * np.sum(np.sum(self.Lambda_inv * self.Sy_inv[None, :, :], 1), 1)) + \
+                   ( self.Hgrad - 0.5 * ynmk2 ) # parentheses are for operation ordering!
+
         natgrad = grad_phi - np.sum(self.phi*grad_phi,1)[:,None]
         grad = natgrad*self.phi
 
