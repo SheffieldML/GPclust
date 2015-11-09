@@ -61,7 +61,7 @@ http://www.biomedcentral.com/1471-2105/14/252
 Additionally Overlapping Mixtures of Gaussian Processes model is implemented, which was published in this paper:
 
 http://linkinghub.elsevier.com/retrieve/pii/S0031320311004109
-@article{Lazaro-Gredilla2012,
+```@article{Lazaro-Gredilla2012,
 title = {{Overlapping Mixtures of Gaussian Processes for the data association problem}},
 author = {L{\'{a}}zaro-Gredilla, Miguel and {Van Vaerenbergh}, Steven and Lawrence, Neil D.},
 doi = {10.1016/j.patcog.2011.10.004},
@@ -73,7 +73,7 @@ url = {},
 volume = {45},
 year = {2012}
 }
-
+```
 
 
 Dependencies
