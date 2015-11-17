@@ -4,7 +4,7 @@
 import numpy as np
 from collapsed_mixture import CollapsedMixture
 import GPy
-from GPy.util.linalg import mdot, pdinv, backsub_both_sides, dpotrs, jitchol, dtrtrs
+from GPy.util.linalg import mdot, pdinv, backsub_both_sides, dpotrs, jitchol, dtrtrs, tdot
 from utilities import multiple_mahalanobis
 from scipy import linalg
 
@@ -25,7 +25,7 @@ class OMGP(CollapsedMixture):
             self.kern = kernels
 
         CollapsedMixture.__init__(self, N, K, prior_Z, alpha, name)
-        
+
         self.link_parameter(GPy.core.parameterization.param.Param('variance', variance, GPy.core.parameterization.transformations.Logexp()))
         self.link_parameters(*self.kern)
 
@@ -61,7 +61,7 @@ class OMGP(CollapsedMixture):
             alpha = linalg.cho_solve(linalg.cho_factor(K + B_inv), self.Y)
             K_B_inv = pdinv(K + B_inv)[0]
 
-            dL_dK = np.outer(alpha, alpha) - K_B_inv
+            dL_dK = .5*(tdot(alpha) - K_B_inv)
 
             kern.update_gradients_full(dL_dK=dL_dK, X=self.X)
 
@@ -70,12 +70,12 @@ class OMGP(CollapsedMixture):
         grad_Lm_variance = 0.0
         for i, kern in enumerate(self.kern):
             K = kern.K(self.X)
-            I = np.eye(self.N)
+            #I = np.eye(self.N)
 
             B_inv = np.diag(1. / ((self.phi[:, i] + 1e-6) / self.variance))
             alpha = np.linalg.solve(K + B_inv, self.Y)
             K_B_inv = pdinv(K + B_inv)[0]
-            dL_dB = np.outer(alpha, alpha) - K_B_inv
+            dL_dB = tdot(alpha) - K_B_inv
             grad_B_inv = np.diag(1. / (self.phi[:, i] + 1e-6))
 
             grad_Lm_variance += 0.5 * np.trace(np.dot(dL_dB, grad_B_inv))
@@ -96,7 +96,7 @@ class OMGP(CollapsedMixture):
             # Data fit
             alpha = linalg.cho_solve(linalg.cho_factor(K + B_inv), self.Y)
 
-            GP_bound += -0.5 * np.dot(self.Y.T, alpha)
+            GP_bound += -0.5 * np.dot(self.Y.T, alpha).trace()
 
             # Penalty
             GP_bound += -0.5 * np.linalg.slogdet(K + B_inv)[1]
@@ -119,7 +119,7 @@ class OMGP(CollapsedMixture):
             B_inv = np.diag(1. / ((self.phi[:, i] + 1e-6) / self.variance))
             alpha = np.linalg.solve(K + B_inv, self.Y)
             K_B_inv = pdinv(K + B_inv)[0]
-            dL_dB = np.outer(alpha, alpha) - K_B_inv
+            dL_dB = tdot(alpha) - K_B_inv
 
             for n in range(self.phi.shape[0]):
                 grad_B_inv = np.zeros_like(B_inv)
@@ -176,10 +176,10 @@ class OMGP(CollapsedMixture):
         plt.scatter(self.X, self.Y, c=self.phi[:, gp_num], cmap=cm.RdBu, vmin=0., vmax=1., lw=0.5)
         plt.colorbar(label='GP {} assignment probability'.format(gp_num))
 
-        GPy.plotting.matplot_dep.Tango.reset()
+        GPy.plotting.Tango.reset()
 
         for i in range(self.phi.shape[1]):
-            col = GPy.plotting.matplot_dep.Tango.nextMedium()
+            col = GPy.plotting.Tango.nextMedium()
             plt.fill_between(XX[:, 0],
                              YY_mu[:, i] - 2 * np.sqrt(YY_var[:, i]),
                              YY_mu[:, i] + 2 * np.sqrt(YY_var[:, i]),
