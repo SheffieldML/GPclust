@@ -5,6 +5,7 @@ import numpy as np
 import GPy
 import time
 import sys #for flushing
+from numpy.linalg.linalg import LinAlgError
 
 class CollapsedVB(GPy.core.Model):
     """
@@ -80,6 +81,7 @@ class CollapsedVB(GPy.core.Model):
         iteration = 0
         bound_old = self.bound()
         searchDir_old = 0.
+        iteration_failed = False
         while True:
 
             if callback is not None:
@@ -104,15 +106,24 @@ class CollapsedVB(GPy.core.Model):
 
             #try a conjugate step
             phi_old = self.get_vb_param().copy()
-            self.set_vb_param(phi_old + step_length*searchDir)
-            bound = self.bound()
+            try:
+                self.set_vb_param(phi_old + step_length*searchDir)
+                bound = self.bound()
+            except LinAlgError:
+                self.set_vb_param(phi_old)
+                bound = bound_old-1
             iteration += 1
 
             #make sure there's an increase in the bound, else revert to steepest, which is guaranteed to increase the bound (it's the same as VBEM)
             if bound<bound_old:
                 searchDir = -natgrad
-                self.set_vb_param(phi_old + step_length*searchDir)
-                bound = self.bound()
+                try:
+                    self.set_vb_param(phi_old + step_length*searchDir)
+                    bound = self.bound()
+                except LinAlgError:
+                    self.set_vb_param(phi_old)
+                    bound = self.bound()
+                    iteration_failed = False
                 iteration += 1
 
 
@@ -140,7 +151,7 @@ class CollapsedVB(GPy.core.Model):
             squareNorm_old = squareNorm
 
             # hyper param_optimisation
-            if (iteration >1) and not (iteration%self.hyperparam_interval):
+            if ((iteration >1) and not (iteration%self.hyperparam_interval)) or iteration_failed:
                 self.optimize_parameters()
 
             bound_old = bound
