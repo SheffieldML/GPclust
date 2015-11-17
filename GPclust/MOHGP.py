@@ -277,7 +277,13 @@ class MOHGP(CollapsedMixture):
                     else:
                         ax.plot(X,Y[ii].T,col,marker='.', linewidth=0.0,alpha=1)
 
-                if gpplot: GPy.plotting.matplot_dep.base_plots.gpplot(Xgrid[:,free_dims].flatten(),mu.flatten(),mu- 2.*np.sqrt(np.diag(var)),mu+2.*np.sqrt(np.diag(var)),col,col,ax=ax,alpha=0.1)
+                if gpplot:
+                    _ = None
+                    helper_data = [_, free_dims, Xgrid, _, _, _, _, _]
+                    helper_prediction = [mu[:,None], [(mu-2.*np.sqrt(np.diag(var)))[:,None],(mu+2.*np.sqrt(np.diag(var)))[:,None]], _]
+                    GPy.plotting.gpy_plot.gp_plots._plot_mean(None, ax, helper_data, helper_prediction, color=col)
+                    GPy.plotting.gpy_plot.gp_plots._plot_confidence(None, ax, helper_data, helper_prediction, None, color=col)
+
 
                 if numbered and on_subplots:
                     ax.text(1,1,str(int(num_in_clust)),transform=ax.transAxes,ha='right',va='top',bbox={'ec':'k','lw':1.3,'fc':'w'})
