@@ -6,6 +6,8 @@ import GPy
 import time
 import sys #for flushing
 from numpy.linalg.linalg import LinAlgError
+class LinAlgWarning(Warning):
+    pass
 
 class CollapsedVB(GPy.core.Model):
     """
@@ -121,6 +123,8 @@ class CollapsedVB(GPy.core.Model):
                     self.set_vb_param(phi_old + step_length*searchDir)
                     bound = self.bound()
                 except LinAlgError:
+                    import warnings
+                    warnings.warn("Caught LinalgError in setting variational parameters, trying to continue with old parameter settings", LinAlgWarning)
                     self.set_vb_param(phi_old)
                     bound = self.bound()
                     iteration_failed = False
