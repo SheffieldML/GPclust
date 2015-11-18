@@ -9,7 +9,8 @@ from utilities import multiple_mahalanobis
 from scipy import linalg
 
 class OMGP(CollapsedMixture):
-    """ OMGP Model
+    """ 
+    Overlapping mixtures of Gaussian processes
     """
     def __init__(self, X, Y, K=2, kernels=None, variance=1., alpha=1., prior_Z='symmetric', name='OMGP'):
 
@@ -176,10 +177,10 @@ class OMGP(CollapsedMixture):
         plt.scatter(self.X, self.Y, c=self.phi[:, gp_num], cmap=cm.RdBu, vmin=0., vmax=1., lw=0.5)
         plt.colorbar(label='GP {} assignment probability'.format(gp_num))
 
-        GPy.plotting.Tango.reset()
+        GPy.plotting.matplot_dep.Tango.reset()
 
         for i in range(self.phi.shape[1]):
-            col = GPy.plotting.Tango.nextMedium()
+            col = GPy.plotting.matplot_dep.Tango.nextMedium()
             plt.fill_between(XX[:, 0],
                              YY_mu[:, i] - 2 * np.sqrt(YY_var[:, i]),
                              YY_mu[:, i] + 2 * np.sqrt(YY_var[:, i]),
