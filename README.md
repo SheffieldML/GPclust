@@ -1,14 +1,14 @@
 GPclust
 =====
 
-Clustering time series using Gaussian processs and Variational Bayes. 
+Clustering time series using Gaussian processes and Variational Bayes. 
 
 User guide and tutorials are available via the included [notebooks](https://github.com/jameshensman/GPclust/blob/master/notebooks/index.ipynb). 
 
 Currently implemented models are
 
-* MOG - Mixture of Gausians
-* MOHGP - Mixtures of Hierarchical Gaussian Processes
+* MOG - Mixture of Gaussians
+* MOHGP - Mixtures of Hierarchical Gaussian processes
 * OMGP - Overlapping mixtures of Gaussian processes
 
 Citation
@@ -61,7 +61,7 @@ http://www.biomedcentral.com/1471-2105/14/252
 
 Additionally Overlapping Mixtures of Gaussian Processes model is implemented (using the variational methods described in the above), which was published in this paper:
 
-```
+```TeX
 @article{Lazaro-Gredilla2012,
   title = {{Overlapping Mixtures of Gaussian Processes for the data association problem}},
   author = {L{\'{a}}zaro-Gredilla, Miguel and {Van Vaerenbergh}, Steven and Lawrence, Neil D.},
