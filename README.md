@@ -1,14 +1,15 @@
 GPclust
 =====
 
-Clustering time series using Gaussian processs and Variational Bayes. 
+Clustering time series using Gaussian processes and variational Bayes. 
 
-User guide and tutorials available from the [homepage.](http://staffwww.dcs.sheffield.ac.uk/people/J.Hensman/gpclust.html)
+User guide and tutorials are available via the included [notebooks](https://github.com/jameshensman/GPclust/blob/master/notebooks/index.ipynb). 
 
 Currently implemented models are
 
-* MOG - Mixture of Gausians
-* MOHGP - Mixtures of Hierarchical Gaussian Processes
+* MOG - Mixture of Gaussians
+* MOHGP - Mixtures of Hierarchical Gaussian processes
+* OMGP - Overlapping mixtures of Gaussian processes
 
 Citation
 ========
@@ -58,23 +59,23 @@ http://www.biomedcentral.com/1471-2105/14/252
 ```
 
 
-Additionally Overlapping Mixtures of Gaussian Processes model is implemented, which was published in this paper:
+Additionally Overlapping Mixtures of Gaussian Processes model is implemented (using the variational methods described in the above), which was published in this paper:
 
-http://linkinghub.elsevier.com/retrieve/pii/S0031320311004109
 ```TeX
 @article{Lazaro-Gredilla2012,
-title = {{Overlapping Mixtures of Gaussian Processes for the data association problem}},
-author = {L{\'{a}}zaro-Gredilla, Miguel and {Van Vaerenbergh}, Steven and Lawrence, Neil D.},
-doi = {10.1016/j.patcog.2011.10.004},
-journal = {Pattern Recognition},
-month = {apr},
-number = {4},
-pages = {1386--1395},
-url = {},
-volume = {45},
-year = {2012}
+  title = {{Overlapping Mixtures of Gaussian Processes for the data association problem}},
+  author = {L{\'{a}}zaro-Gredilla, Miguel and {Van Vaerenbergh}, Steven and Lawrence, Neil D.},
+  doi = {10.1016/j.patcog.2011.10.004},
+  journal = {Pattern Recognition},
+  month = {apr},
+  number = {4},
+  pages = {1386--1395},
+  url = {},
+  volume = {45},
+  year = {2012}
 }
 ```
+
 
 
 Dependencies
@@ -82,7 +83,7 @@ Dependencies
 
 This work depends on the [GPy project](https://github.com/SheffieldML/GPy), as well as the numpy/scipy stack. matplotlib is optional for plotting. 
 
-I've tested the demos with GPy v0.6, but it should work with later versions also. 
+I've tested the demos with GPy v0.8, but it should work with later versions also. 
 
 
 Contributors
@@ -90,3 +91,4 @@ Contributors
 
 - James Hensman
 - Valentine Svensson
+- Max Zwiessele

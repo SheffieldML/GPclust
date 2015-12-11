@@ -194,7 +194,7 @@ class MOHGP(CollapsedMixture):
         numbered    (bool) whether to include numbers on the top-right of each subplot.
         data_in_replicate (bool) whether to assume the data are in replicate, and plot the mean of each replicate instead of each data point
         fixed_inputs (list of tuples, as GPy.GP.plot) for GPs defined on more that one input, we'll plot a slice of the GP. this list defines how to fix the remaining inputs.
-        ylim        (tuple) the limits to set on the y-axes. 
+        ylim        (tuple) the limits to set on the y-axes.
 
         """
 
@@ -210,7 +210,8 @@ class MOHGP(CollapsedMixture):
             fig = plt.figure()
         else:
             fig = plt.gcf()
-        GPy.plotting.matplot_dep.Tango.reset()
+        Tango = GPy.plotting.Tango
+        Tango.reset()
 
         if data_in_replicate:
             X_ = self.X[:, free_dims].flatten()
@@ -262,7 +263,7 @@ class MOHGP(CollapsedMixture):
                     ax = fig.add_subplot(Nx,Ny,subplot_count+1)
                     subplot_count += 1
                 if colour:
-                    col = GPy.plotting.matplot_dep.Tango.nextMedium()
+                    col = Tango.nextMedium()
                 else:
                     col='k'
                 if joined:
@@ -276,7 +277,13 @@ class MOHGP(CollapsedMixture):
                     else:
                         ax.plot(X,Y[ii].T,col,marker='.', linewidth=0.0,alpha=1)
 
-                if gpplot: GPy.plotting.matplot_dep.base_plots.gpplot(Xgrid[:,free_dims].flatten(),mu.flatten(),mu- 2.*np.sqrt(np.diag(var)),mu+2.*np.sqrt(np.diag(var)),col,col,ax=ax,alpha=0.1)
+                if gpplot:
+                    _ = None
+                    helper_data = [_, free_dims, Xgrid, _, _, _, _, _]
+                    helper_prediction = [mu[:,None], [(mu-2.*np.sqrt(np.diag(var)))[:,None],(mu+2.*np.sqrt(np.diag(var)))[:,None]], _]
+                    GPy.plotting.gpy_plot.gp_plots._plot_mean(None, ax, helper_data, helper_prediction, color=col)
+                    GPy.plotting.gpy_plot.gp_plots._plot_confidence(None, ax, helper_data, helper_prediction, None, color=col)
+
 
                 if numbered and on_subplots:
                     ax.text(1,1,str(int(num_in_clust)),transform=ax.transAxes,ha='right',va='top',bbox={'ec':'k','lw':1.3,'fc':'w'})
@@ -287,6 +294,6 @@ class MOHGP(CollapsedMixture):
                 ax.set_ylim(ymin, ymax)
 
         if on_subplots:
-            GPy.plotting.matplot_dep.base_plots.align_subplots(Nx,Ny,xlim=(xmin,xmax), ylim=(ymin, ymax))
+            GPy.plotting.matplot_dep.util.align_subplots(Nx,Ny,xlim=(xmin,xmax), ylim=(ymin, ymax))
         else:
             ax.set_xlim(xmin,xmax)
