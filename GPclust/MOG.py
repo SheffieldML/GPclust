@@ -2,10 +2,15 @@
 # Licensed under the GPL v3 (see LICENSE.txt)
 
 import numpy as np
-from utilities import multiple_pdinv, lngammad
+
+try:
+    from .utilities import multiple_pdinv, lngammad
+except ImportError:
+    from .np_utilities import multiple_pdinv, lngammad
+    
 from scipy.special import gammaln, digamma
 from scipy import stats
-from collapsed_mixture import CollapsedMixture
+from .collapsed_mixture import CollapsedMixture
 
 class MOG(CollapsedMixture):
     """
@@ -129,5 +134,5 @@ class MOG(CollapsedMixture):
             zz_components *= pi[np.newaxis,:]
             [plt.contour(xx, yy, zz.reshape(100, 100), [stats.scoreatpercentile(zz_data, 5.)], colors='k', linewidths=1) for zz in zz_components.T]
         else:
-            print "plotting only for 2D mixtures"
+            print("plotting only for 2D mixtures")
 

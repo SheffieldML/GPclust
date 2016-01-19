@@ -2,10 +2,14 @@
 # Licensed under the GPL v3 (see LICENSE.txt)
 
 import numpy as np
-from collapsed_mixture import CollapsedMixture
+from .collapsed_mixture import CollapsedMixture
 import GPy
 from GPy.util.linalg import mdot, pdinv, backsub_both_sides, dpotrs, jitchol, dtrtrs
-from utilities import multiple_mahalanobis
+
+try:
+    from .utilities import multiple_mahalanobis
+except ImportError:
+    from .np_utilities import multiple_mahalanobis_numpy_loops as multiple_mahalanobis
 
 class MOHGP(CollapsedMixture):
     """

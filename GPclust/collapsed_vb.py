@@ -132,20 +132,20 @@ class CollapsedVB(GPy.core.Model):
 
 
             if verbose:
-                print '\riteration '+str(iteration)+' bound='+str(bound) + ' grad='+str(squareNorm) + ', beta='+str(beta),
+                print('\riteration '+str(iteration)+' bound='+str(bound) + ' grad='+str(squareNorm) + ', beta='+str(beta),)
                 sys.stdout.flush()
 
             # converged yet? try the parameters if so
             if np.abs(bound-bound_old)<=ftol:
-                if verbose:print 'vb converged (ftol)'
+                if verbose:print('vb converged (ftol)')
                 if self.optimize_parameters()<1e-1:
                     break
             if squareNorm<=gtol:
-                if verbose:print 'vb converged (gtol)'
+                if verbose:print('vb converged (gtol)')
                 if self.optimize_parameters()<1e-1:
                     break
             if iteration>=maxiter:
-                if verbose:print 'maxiter exceeded'
+                if verbose:print('maxiter exceeded')
                 break
 
             #store essentials of previous iteration

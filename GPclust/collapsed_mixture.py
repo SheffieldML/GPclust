@@ -2,9 +2,15 @@
 # Licensed under the GPL v3 (see LICENSE.txt)
 
 import numpy as np
-from utilities import ln_dirichlet_C, softmax_weave
+
+try:
+    from .utilities import ln_dirichlet_C, softmax_weave
+except ImportError:
+    from .np_utilities import ln_dirichlet_C
+    from .np_utilities import softmax_numpy as softmax_weave
+
 from scipy.special import gammaln, digamma
-from collapsed_vb import CollapsedVB
+from .collapsed_vb import CollapsedVB
 
 class CollapsedMixture(CollapsedVB):
     """
@@ -70,7 +76,7 @@ class CollapsedMixture(CollapsedVB):
             D = self.K*(gammaln(1.+self.alpha) - gammaln(self.alpha))
             return A.sum() + B.sum() - C.sum() + D
         else:
-            raise NotImplementedError, "invalid mixing proportion prior type: %s" % self.prior_Z
+            raise NotImplementedError("invalid mixing proportion prior type: %s" % self.prior_Z)
 
     def mixing_prop_bound_grad(self):
         """
@@ -85,7 +91,7 @@ class CollapsedMixture(CollapsedVB):
             C = digamma(self.phi_tilde_plus_hat + self.alpha + 1.).cumsum()
             return A + B - C
         else:
-            raise NotImplementedError, "invalid mixing proportion prior type: %s"%self.prior_Z
+            raise NotImplementedError("invalid mixing proportion prior type: %s"%self.prior_Z)
 
     def reorder(self):
         """
@@ -130,7 +136,7 @@ class CollapsedMixture(CollapsedVB):
         if np.sum(self.phi[:,indexK]>threshold) <2:
             return False
 
-        if verbose:print "\nattempting to split cluster ", indexK
+        if verbose:print("\nattempting to split cluster ", indexK)
 
         bound_old = self.bound()
         phi_old = self.get_vb_param().copy()
@@ -166,13 +172,13 @@ class CollapsedMixture(CollapsedVB):
             self.K = old_K
             self.set_vb_param(phi_old)
             self.optimizer_array = param_old
-            if verbose:print "split failed, bound changed by: ",bound_increase, '(K=%s)' % self.K
+            if verbose:print("split failed, bound changed by: ",bound_increase, '(K=%s)' % self.K)
 
             return False
 
         else:
-            if verbose:print "split suceeded, bound changed by: ", bound_increase, ',', self.K-old_K,' new clusters', '(K=%s)' % self.K
-            if verbose:print "optimizing new split to convergence:"
+            if verbose:print("split suceeded, bound changed by: ", bound_increase, ',', self.K-old_K,' new clusters', '(K=%s)' % self.K)
+            if verbose:print("optimizing new split to convergence:")
             if optimize_params:
                 self.optimize(**optimize_params)
 
