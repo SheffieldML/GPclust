@@ -133,7 +133,6 @@ class OMGP(CollapsedMixture):
             I = np.eye(self.N)
 
             B_inv = np.diag(1. / ((self.phi[:, i] + 1e-6) / self.variance))
-            # alpha = np.linalg.solve(K + B_inv, self.Y)
             K_B_inv = pdinv(K + B_inv)[0]
             alpha = np.dot(K_B_inv, self.Y)
             dL_dB = tdot(alpha) - K_B_inv
@@ -159,11 +158,12 @@ class OMGP(CollapsedMixture):
         # Predict mean
         # This works but should Cholesky for stability
         B_inv = np.diag(1. / (self.phi[:, i] / self.variance))
-        mu = kx.T.dot(np.linalg.solve((K + B_inv), self.Y))
+        K_B_inv = pdinv(K + B_inv)[0]
+        mu = kx.T.dot(np.dot(K_B_inv, self.Y))
 
         # Predict variance
         kxx = kern.K(Xnew, Xnew)
-        va = self.variance + kxx - kx.T.dot(np.linalg.solve((K + B_inv), kx))
+        va = self.variance + kxx - kx.T.dot(np.dot(K_B_inv, kx))
 
         return mu, va
 
