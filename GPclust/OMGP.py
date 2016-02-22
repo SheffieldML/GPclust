@@ -139,8 +139,8 @@ class OMGP(CollapsedMixture):
 
             for n in range(self.phi.shape[0]):
                 grad_B_inv = np.zeros_like(B_inv)
-                grad_B_inv[n, n] = -self.variance / (self.phi[n, i] ** 2 + 1e-6)
-                grad_Lm[n, i] = 0.5 * np.trace(np.dot(dL_dB, grad_B_inv))
+                grad_B_inv_nonzero = -self.variance / (self.phi[n, i] ** 2 + 1e-6)
+                grad_Lm[n, i] = 0.5 * dL_dB[n, n] * grad_B_inv_nonzero
 
         grad_phi = grad_Lm + self.mixing_prop_bound_grad() + self.Hgrad
 
