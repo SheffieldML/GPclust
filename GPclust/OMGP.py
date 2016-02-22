@@ -4,7 +4,8 @@
 import numpy as np
 from .collapsed_mixture import CollapsedMixture
 import GPy
-from GPy.util.linalg import mdot, pdinv, backsub_both_sides, dpotrs, jitchol, dtrtrs, tdot
+from GPy.util.linalg import mdot, pdinv, backsub_both_sides, dpotrs, jitchol, dtrtrs
+from GPy.util.linalg import tdot_numpy as tdot
 from scipy import linalg
 
 class OMGP(CollapsedMixture):
