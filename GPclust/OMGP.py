@@ -133,12 +133,12 @@ class OMGP(CollapsedMixture):
             I = np.eye(self.N)
 
             B_inv = np.diag(1. / ((self.phi[:, i] + 1e-6) / self.variance))
-            alpha = np.linalg.solve(K + B_inv, self.Y)
+            # alpha = np.linalg.solve(K + B_inv, self.Y)
             K_B_inv = pdinv(K + B_inv)[0]
+            alpha = np.dot(K_B_inv, self.Y)
             dL_dB = tdot(alpha) - K_B_inv
 
             for n in range(self.phi.shape[0]):
-                grad_B_inv = np.zeros_like(B_inv)
                 grad_B_inv_nonzero = -self.variance / (self.phi[n, i] ** 2 + 1e-6)
                 grad_Lm[n, i] = 0.5 * dL_dB[n, n] * grad_B_inv_nonzero
 
