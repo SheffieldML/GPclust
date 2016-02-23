@@ -6,7 +6,6 @@ from .collapsed_mixture import CollapsedMixture
 import GPy
 from GPy.util.linalg import mdot, pdinv, backsub_both_sides, dpotrs, jitchol, dtrtrs
 from GPy.util.linalg import tdot_numpy as tdot
-from scipy import linalg
 
 class OMGP(CollapsedMixture):
     """ 
@@ -182,27 +181,43 @@ class OMGP(CollapsedMixture):
     def plot(self, gp_num=0):
         """
         Plot the mixture of Gaussian Processes.
+
+        Supports plotting 1d and 2d regression.
         """
         from matplotlib import pylab as plt
         from matplotlib import cm
 
         XX = np.linspace(self.X.min(), self.X.max())[:, None]
 
-        YY_mu, YY_var = self.predict_components(XX)
+        if self.Y.shape[1] == 1:
+            plt.scatter(self.X, self.Y, c=self.phi[:, gp_num], cmap=cm.RdBu, vmin=0., vmax=1., lw=0.5)
+            plt.colorbar(label='GP {} assignment probability'.format(gp_num))
 
-        plt.scatter(self.X, self.Y, c=self.phi[:, gp_num], cmap=cm.RdBu, vmin=0., vmax=1., lw=0.5)
-        plt.colorbar(label='GP {} assignment probability'.format(gp_num))
+            GPy.plotting.Tango.reset()
 
-        GPy.plotting.Tango.reset()
+            for i in range(self.phi.shape[1]):
+                YY_mu, YY_var = self.predict(XX, i)
+                col = GPy.plotting.Tango.nextMedium()
+                plt.fill_between(XX[:, 0],
+                                 YY_mu[:, 0] - 2 * np.sqrt(YY_var[:, 0]),
+                                 YY_mu[:, 0] + 2 * np.sqrt(YY_var[:, 0]),
+                                 alpha=0.1,
+                                 facecolor=col)
+                plt.plot(XX, YY_mu[:, 0], c=col, lw=2);
 
-        for i in range(self.phi.shape[1]):
-            col = GPy.plotting.Tango.nextMedium()
-            plt.fill_between(XX[:, 0],
-                             YY_mu[:, i] - 2 * np.sqrt(YY_var[:, i]),
-                             YY_mu[:, i] + 2 * np.sqrt(YY_var[:, i]),
-                             alpha=0.1,
-                             facecolor=col)
-            plt.plot(XX, YY_mu[:, i], c=col, lw=2);
+        elif self.Y.shape[1] == 2:
+            plt.scatter(self.Y[:, 0], self.Y[:, 1], c=self.phi[:, gp_num], cmap=cm.RdBu, vmin=0., vmax=1., lw=0.5)
+            plt.colorbar(label='GP {} assignment probability'.format(gp_num))
+
+            GPy.plotting.Tango.reset()
+
+            for i in range(self.phi.shape[1]):
+                YY_mu, YY_var = self.predict(XX, i)
+                col = GPy.plotting.Tango.nextMedium()
+                plt.plot(YY_mu[:, 0], YY_mu[:, 1], c=col, lw=2);
+
+        else:
+            raise NotImplementedError('Only 1d and 2d regression can be plotted')
 
     def plot_probs(self, gp_num=0):
         """
