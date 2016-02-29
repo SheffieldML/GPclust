@@ -133,16 +133,12 @@ class OMGP(CollapsedMixture):
             I = np.eye(self.N)
 
             B_inv = np.diag(1. / ((self.phi[:, i] + 1e-6) / self.variance))
-            K_B_inv = pdinv(K + B_inv)[0]
-            alpha = np.dot(K_B_inv, self.Y)
-            dL_dB = tdot(alpha) - K_B_inv
+            K_B_inv, L_B, _, _ = pdinv(K + B_inv)
+            alpha, _ = dpotrs(L_B, self.Y)
+            dL_dB_diag = np.sum(np.square(alpha), 1) - np.diag(K_B_inv)
 
-            grad_Lm[:,i] = -0.5 * self.variance * np.diag(dL_dB) / (self.phi[:,i]**2 + 1e-6) 
+            grad_Lm[:,i] = -0.5 * self.variance * dL_dB_diag / (self.phi[:,i]**2 + 1e-6) 
             
-            #for n in range(self.phi.shape[0]):
-                #grad_B_inv_nonzero = -self.variance / (self.phi[n, i] ** 2 + 1e-6)
-                #grad_Lm[n, i] = 0.5 * dL_dB[n, n] * grad_B_inv_nonzero
-
         grad_phi = grad_Lm + self.mixing_prop_bound_grad() + self.Hgrad
 
         natgrad = grad_phi - np.sum(self.phi * grad_phi, 1)[:, None]
