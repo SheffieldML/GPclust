@@ -137,9 +137,11 @@ class OMGP(CollapsedMixture):
             alpha = np.dot(K_B_inv, self.Y)
             dL_dB = tdot(alpha) - K_B_inv
 
-            for n in range(self.phi.shape[0]):
-                grad_B_inv_nonzero = -self.variance / (self.phi[n, i] ** 2 + 1e-6)
-                grad_Lm[n, i] = 0.5 * dL_dB[n, n] * grad_B_inv_nonzero
+            grad_Lm[:,i] = -0.5 * self.variance * np.diag(dL_dB) / (self.phi[:,i]**2 + 1e-6) 
+            
+            #for n in range(self.phi.shape[0]):
+                #grad_B_inv_nonzero = -self.variance / (self.phi[n, i] ** 2 + 1e-6)
+                #grad_Lm[n, i] = 0.5 * dL_dB[n, n] * grad_B_inv_nonzero
 
         grad_phi = grad_Lm + self.mixing_prop_bound_grad() + self.Hgrad
 
@@ -193,11 +195,16 @@ class OMGP(CollapsedMixture):
             plt.scatter(self.X, self.Y, c=self.phi[:, gp_num], cmap=cm.RdBu, vmin=0., vmax=1., lw=0.5)
             plt.colorbar(label='GP {} assignment probability'.format(gp_num))
 
-            GPy.plotting.Tango.reset()
+            try:
+                Tango = GPy.plotting.Tango
+            except:
+                Tango = GPy.plotting.matplot_dep.Tango
+            Tango.reset()
+
 
             for i in range(self.phi.shape[1]):
                 YY_mu, YY_var = self.predict(XX, i)
-                col = GPy.plotting.Tango.nextMedium()
+                col = Tango.nextMedium()
                 plt.fill_between(XX[:, 0],
                                  YY_mu[:, 0] - 2 * np.sqrt(YY_var[:, 0]),
                                  YY_mu[:, 0] + 2 * np.sqrt(YY_var[:, 0]),
@@ -209,11 +216,11 @@ class OMGP(CollapsedMixture):
             plt.scatter(self.Y[:, 0], self.Y[:, 1], c=self.phi[:, gp_num], cmap=cm.RdBu, vmin=0., vmax=1., lw=0.5)
             plt.colorbar(label='GP {} assignment probability'.format(gp_num))
 
-            GPy.plotting.Tango.reset()
+            Tango.reset()
 
             for i in range(self.phi.shape[1]):
                 YY_mu, YY_var = self.predict(XX, i)
-                col = GPy.plotting.Tango.nextMedium()
+                col = Tango.nextMedium()
                 plt.plot(YY_mu[:, 0], YY_mu[:, 1], c=col, lw=2);
 
         else:
