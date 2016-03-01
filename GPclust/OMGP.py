@@ -2,11 +2,10 @@
 # Licensed under the GPL v3 (see LICENSE.txt)
 
 import numpy as np
-from collapsed_mixture import CollapsedMixture
+from .collapsed_mixture import CollapsedMixture
 import GPy
-from GPy.util.linalg import mdot, pdinv, backsub_both_sides, dpotrs, jitchol, dtrtrs, tdot
-from utilities import multiple_mahalanobis
-from scipy import linalg
+from GPy.util.linalg import mdot, pdinv, backsub_both_sides, dpotrs, jitchol, dtrtrs
+from GPy.util.linalg import tdot_numpy as tdot
 
 class OMGP(CollapsedMixture):
     """ 
@@ -134,15 +133,12 @@ class OMGP(CollapsedMixture):
             I = np.eye(self.N)
 
             B_inv = np.diag(1. / ((self.phi[:, i] + 1e-6) / self.variance))
-            alpha = np.linalg.solve(K + B_inv, self.Y)
-            K_B_inv = pdinv(K + B_inv)[0]
-            dL_dB = tdot(alpha) - K_B_inv
+            K_B_inv, L_B, _, _ = pdinv(K + B_inv)
+            alpha, _ = dpotrs(L_B, self.Y)
+            dL_dB_diag = np.sum(np.square(alpha), 1) - np.diag(K_B_inv)
 
-            for n in range(self.phi.shape[0]):
-                grad_B_inv = np.zeros_like(B_inv)
-                grad_B_inv[n, n] = -self.variance / (self.phi[n, i] ** 2 + 1e-6)
-                grad_Lm[n, i] = 0.5 * np.trace(np.dot(dL_dB, grad_B_inv))
-
+            grad_Lm[:,i] = -0.5 * self.variance * dL_dB_diag / (self.phi[:,i]**2 + 1e-6) 
+            
         grad_phi = grad_Lm + self.mixing_prop_bound_grad() + self.Hgrad
 
         natgrad = grad_phi - np.sum(self.phi * grad_phi, 1)[:, None]
@@ -160,11 +156,12 @@ class OMGP(CollapsedMixture):
         # Predict mean
         # This works but should Cholesky for stability
         B_inv = np.diag(1. / (self.phi[:, i] / self.variance))
-        mu = kx.T.dot(np.linalg.solve((K + B_inv), self.Y))
+        K_B_inv = pdinv(K + B_inv)[0]
+        mu = kx.T.dot(np.dot(K_B_inv, self.Y))
 
         # Predict variance
         kxx = kern.K(Xnew, Xnew)
-        va = self.variance + kxx - kx.T.dot(np.linalg.solve((K + B_inv), kx))
+        va = self.variance + kxx - kx.T.dot(np.dot(K_B_inv, kx))
 
         return mu, va
 
@@ -182,27 +179,52 @@ class OMGP(CollapsedMixture):
     def plot(self, gp_num=0):
         """
         Plot the mixture of Gaussian Processes.
+
+        Supports plotting 1d and 2d regression.
         """
         from matplotlib import pylab as plt
         from matplotlib import cm
 
         XX = np.linspace(self.X.min(), self.X.max())[:, None]
 
-        YY_mu, YY_var = self.predict_components(XX)
+        if self.Y.shape[1] == 1:
+            plt.scatter(self.X, self.Y, c=self.phi[:, gp_num], cmap=cm.RdBu, vmin=0., vmax=1., lw=0.5)
+            plt.colorbar(label='GP {} assignment probability'.format(gp_num))
 
-        plt.scatter(self.X, self.Y, c=self.phi[:, gp_num], cmap=cm.RdBu, vmin=0., vmax=1., lw=0.5)
-        plt.colorbar(label='GP {} assignment probability'.format(gp_num))
+            try:
+                Tango = GPy.plotting.Tango
+            except:
+                Tango = GPy.plotting.matplot_dep.Tango
+            Tango.reset()
 
-        GPy.plotting.matplot_dep.Tango.reset()
 
-        for i in range(self.phi.shape[1]):
-            col = GPy.plotting.matplot_dep.Tango.nextMedium()
-            plt.fill_between(XX[:, 0],
-                             YY_mu[:, i] - 2 * np.sqrt(YY_var[:, i]),
-                             YY_mu[:, i] + 2 * np.sqrt(YY_var[:, i]),
-                             alpha=0.1,
-                             facecolor=col)
-            plt.plot(XX, YY_mu[:, i], c=col, lw=2);
+            for i in range(self.phi.shape[1]):
+                YY_mu, YY_var = self.predict(XX, i)
+                col = Tango.nextMedium()
+                plt.fill_between(XX[:, 0],
+                                 YY_mu[:, 0] - 2 * np.sqrt(YY_var[:, 0]),
+                                 YY_mu[:, 0] + 2 * np.sqrt(YY_var[:, 0]),
+                                 alpha=0.1,
+                                 facecolor=col)
+                plt.plot(XX, YY_mu[:, 0], c=col, lw=2);
+
+        elif self.Y.shape[1] == 2:
+            plt.scatter(self.Y[:, 0], self.Y[:, 1], c=self.phi[:, gp_num], cmap=cm.RdBu, vmin=0., vmax=1., lw=0.5)
+            plt.colorbar(label='GP {} assignment probability'.format(gp_num))
+
+            try:
+                Tango = GPy.plotting.Tango
+            except:
+                Tango = GPy.plotting.matplot_dep.Tango
+            Tango.reset()
+
+            for i in range(self.phi.shape[1]):
+                YY_mu, YY_var = self.predict(XX, i)
+                col = Tango.nextMedium()
+                plt.plot(YY_mu[:, 0], YY_mu[:, 1], c=col, lw=2);
+
+        else:
+            raise NotImplementedError('Only 1d and 2d regression can be plotted')
 
     def plot_probs(self, gp_num=0):
         """
