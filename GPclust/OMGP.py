@@ -212,6 +212,10 @@ class OMGP(CollapsedMixture):
             plt.scatter(self.Y[:, 0], self.Y[:, 1], c=self.phi[:, gp_num], cmap=cm.RdBu, vmin=0., vmax=1., lw=0.5)
             plt.colorbar(label='GP {} assignment probability'.format(gp_num))
 
+            try:
+                Tango = GPy.plotting.Tango
+            except:
+                Tango = GPy.plotting.matplot_dep.Tango
             Tango.reset()
 
             for i in range(self.phi.shape[1]):
