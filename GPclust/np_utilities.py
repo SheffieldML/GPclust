@@ -41,6 +41,9 @@ def softmax_numpy(X):
 
 
 def multiple_mahalanobis_numpy_loops(X1, X2, L):
+    N1, D = X1.shape
+    N2, D = X2.shape
+    
     LLT = L.dot(L.T)
     result = np.zeros(shape=(N1, N2), dtype=np.float64)
     n = 0
@@ -49,7 +52,7 @@ def multiple_mahalanobis_numpy_loops(X1, X2, L):
         while m < N2:
             x1x2 = X1[n] - X2[m]
             result[n, m] = x1x2.dot(np.linalg.solve(LLT, x1x2))
-            mm += 1
+            m += 1
 
         n += 1
 
