@@ -83,28 +83,31 @@ class CollapsedVB(GPy.core.Model):
         
         ## For GPy style notebook verbosity
         
-        try:
-            from IPython.display import display
-            from IPython.html.widgets import IntProgress, HTML, Box, VBox, HBox, FlexBox
-            self.text = HTML(width='100%')
-            self.progress = IntProgress(min=0, max=maxiter)
-            self.progress.bar_style = 'info'
-            self.status = 'Running'
-            
-            html_begin = """<style type="text/css">
-            .tg-opt  {font-family:"Courier New", Courier, monospace !important;padding:2px 3px;word-break:normal;border-collapse:collapse;border-spacing:0;border-color:#DCDCDC;margin:0px auto;width:100%;}
-            .tg-opt td{font-family:"Courier New", Courier, monospace !important;font-weight:bold;color:#444;background-color:#F7FDFA;border-style:solid;border-width:1px;overflow:hidden;word-break:normal;border-color:#DCDCDC;}
-            .tg-opt th{font-family:"Courier New", Courier, monospace !important;font-weight:normal;color:#fff;background-color:#26ADE4;border-style:solid;border-width:1px;overflow:hidden;word-break:normal;border-color:#DCDCDC;}
-            .tg-opt .tg-left{font-family:"Courier New", Courier, monospace !important;font-weight:normal;text-align:left;}
-            .tg-opt .tg-right{font-family:"Courier New", Courier, monospace !important;font-weight:normal;text-align:right;}
-            </style>
-            <table class="tg-opt">"""
+        if verbose:
+            try:
+                from IPython.display import display
+                from IPython.html.widgets import IntProgress, HTML, Box, VBox, HBox, FlexBox
+                self.text = HTML(width='100%')
+                self.progress = IntProgress(min=0, max=maxiter)
+                self.progress.bar_style = 'info'
+                self.status = 'Running'
 
-            html_end = "</table>"
-            
-            self.ipython_notebook = True
-        except:
-            # Not in Ipython notebook
+                html_begin = """<style type="text/css">
+                .tg-opt  {font-family:"Courier New", Courier, monospace !important;padding:2px 3px;word-break:normal;border-collapse:collapse;border-spacing:0;border-color:#DCDCDC;margin:0px auto;width:100%;}
+                .tg-opt td{font-family:"Courier New", Courier, monospace !important;font-weight:bold;color:#444;background-color:#F7FDFA;border-style:solid;border-width:1px;overflow:hidden;word-break:normal;border-color:#DCDCDC;}
+                .tg-opt th{font-family:"Courier New", Courier, monospace !important;font-weight:normal;color:#fff;background-color:#26ADE4;border-style:solid;border-width:1px;overflow:hidden;word-break:normal;border-color:#DCDCDC;}
+                .tg-opt .tg-left{font-family:"Courier New", Courier, monospace !important;font-weight:normal;text-align:left;}
+                .tg-opt .tg-right{font-family:"Courier New", Courier, monospace !important;font-weight:normal;text-align:right;}
+                </style>
+                <table class="tg-opt">"""
+
+                html_end = "</table>"
+
+                self.ipython_notebook = True
+            except:
+                # Not in Ipython notebook
+                self.ipython_notebook = False
+        else:
             self.ipython_notebook = False
             
         if self.ipython_notebook:
