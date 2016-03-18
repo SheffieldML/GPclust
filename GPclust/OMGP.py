@@ -175,6 +175,22 @@ class OMGP(CollapsedMixture):
             vas.append(va)
 
         return np.array(mus)[:, :, 0].T, np.array(vas)[:, :, 0].T
+    
+    def sample(self, Xnew, gp=0, size=10, full_cov=True):
+        ''' Sample the posterior of a component
+        '''
+        mu, va = self.predict(Xnew, gp)
+        
+        samples = []
+        for i in range(mu.shape[1]):
+            if full_cov:
+                smp = np.random.multivariate_normal(mean=mu[:, i], cov=va, size=size)
+            else:
+                smp = np.random.multivariate_normal(mean=mu[:, i], cov=np.diag(np.diag(va)), size=size)
+        
+            samples.append(smp)
+        
+        return np.stack(samples, -1)
 
     def plot(self, gp_num=0):
         """
