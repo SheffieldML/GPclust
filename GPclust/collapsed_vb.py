@@ -80,9 +80,9 @@ class CollapsedVB(GPy.core.Model):
         """
 
         assert method in ['FR', 'PR','HS','steepest'], 'invalid conjugate gradient method specified.'
-        
+
         ## For GPy style notebook verbosity
-        
+
         if verbose:
             try:
                 from IPython.display import display
@@ -109,7 +109,7 @@ class CollapsedVB(GPy.core.Model):
                 self.ipython_notebook = False
         else:
             self.ipython_notebook = False
-            
+
         if self.ipython_notebook:
             left_col = VBox(children=[self.progress, self.text], padding=2, width='100%')
             self.hor_align = FlexBox(children = [left_col], width='100%', orientation='horizontal')
@@ -122,7 +122,7 @@ class CollapsedVB(GPy.core.Model):
                          'padding': '2px',
                          'width': "100%",
                          })
-                
+
                 self.hor_align.set_css({
                          'width': "100%",
                          })
@@ -134,11 +134,11 @@ class CollapsedVB(GPy.core.Model):
 
             except:
                 pass
-            
+
         self.start = time.time()
         self._time = self.start
-            
-        ## --- 
+
+        ## ---
 
         iteration = 0
         bound_old = self.bound()
@@ -174,7 +174,7 @@ class CollapsedVB(GPy.core.Model):
             except LinAlgError:
                 self.set_vb_param(phi_old)
                 bound = bound_old-1
-            
+
             iteration += 1
 
             # Make sure there's an increase in the bound, else revert to steepest, which is guaranteed to increase the bound.
@@ -195,13 +195,13 @@ class CollapsedVB(GPy.core.Model):
 
             if verbose:
                 if self.ipython_notebook:
-                    
+
                     t = time.time()
                     seconds = t-self.start
-                    
+
                     self.status = 'Running'
                     self.progress.bar_style = 'info'
-                    
+
                     names_vals = [['conjugate gradient method', "{:s}".format(method)],
                                   ['runtime', "{:.1f}s".format(seconds)],
                                   ['evaluation', "{}".format(iteration)],
@@ -217,10 +217,10 @@ class CollapsedVB(GPy.core.Model):
                         html_body += "<td class='tg-left'>{}</td>".format(name)
                         html_body += "<td class='tg-right'>{}</td>".format(val)
                         html_body += "</tr>"
-                        
+
                     self.progress.value = iteration
                     self.text.value = html_begin + html_body + html_end
-                    
+
                 else:
                     print('\riteration '+str(iteration)+' bound='+str(bound) + ' grad='+str(squareNorm) + ', beta='+str(beta))
                     sys.stdout.flush()
@@ -231,61 +231,61 @@ class CollapsedVB(GPy.core.Model):
                     if self.ipython_notebook:
                         self.status = 'vb converged (ftol)'
                         names_vals[-1] = ['status', "{:s}".format(self.status)]
-                        
+
                         html_body = ""
                         for name, val in names_vals:
                             html_body += "<tr>"
                             html_body += "<td class='tg-left'>{}</td>".format(name)
                             html_body += "<td class='tg-right'>{}</td>".format(val)
                             html_body += "</tr>"
-                            
+
                         self.text.value = html_begin + html_body + html_end
                         self.progress.bar_style = 'success'
-                        
+
                     else:
                         print('vb converged (ftol)')
 
                 if self.optimize_parameters() < 1e-1:
                     break
-                    
+
             if squareNorm <= gtol:
                 if verbose:
                     if self.ipython_notebook:
                         self.status = 'vb converged (gtol)'
                         names_vals[-1] = ['status', "{:s}".format(self.status)]
-                        
+
                         html_body = ""
                         for name, val in names_vals:
                             html_body += "<tr>"
                             html_body += "<td class='tg-left'>{}</td>".format(name)
                             html_body += "<td class='tg-right'>{}</td>".format(val)
                             html_body += "</tr>"
-                            
+
                         self.text.value = html_begin + html_body + html_end
                         self.progress.bar_style = 'success'
-                    
+
                     else:
                         print('vb converged (gtol)')
-                        
+
                 if self.optimize_parameters() < 1e-1:
                     break
-                    
+
             if iteration >= maxiter:
                 if verbose:
                     if self.ipython_notebook:
                         self.status = 'maxiter exceeded'
                         names_vals[-1] = ['status', "{:s}".format(self.status)]
-                        
+
                         html_body = ""
                         for name, val in names_vals:
                             html_body += "<tr>"
                             html_body += "<td class='tg-left'>{}</td>".format(name)
                             html_body += "<td class='tg-right'>{}</td>".format(val)
                             html_body += "</tr>"
-                            
+
                         self.text.value = html_begin + html_body + html_end
                         self.progress.bar_style = 'warning'
-                    
+
                     else:
                         print('maxiter exceeded')
                 break
@@ -302,6 +302,12 @@ class CollapsedVB(GPy.core.Model):
 
             bound_old = bound
 
+        # Clean up temporary fields after optimization
+        if self.ipython_notebook:
+            del self.text
+            del self.progress
+            del self.hor_align
+
 
 
     def optimize_parameters(self):
@@ -315,9 +321,3 @@ class CollapsedVB(GPy.core.Model):
             return self.bound()-start
         else:
             return 0.
-
-
-
-
-
-
