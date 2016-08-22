@@ -2,21 +2,21 @@
 # Licensed under the GPL v3 (see LICENSE.txt)
 
 import numpy as np
-import GPy
+import GPflow
 import time
 import sys #for flushing
 from numpy.linalg.linalg import LinAlgError
 class LinAlgWarning(Warning):
     pass
 
-class CollapsedVB(GPy.core.Model):
+class CollapsedVB(GPflow.model.Model):
     """
-    A base class for collapsed variational models, using the GPy framework for
+    A base class for collapsed variational models, using the GPflow framework for
     non-variational parameters.
 
     Optimisation of the (collapsed) variational paremters is performed by
-    Riemannian conjugate-gradient ascent, interleaved with optimisation of the
-    non-variational parameters
+    Riemannian conjugate-gradient ascent, interleaved with optimisation (in tensorfow)
+    of the non-variational parameters
 
     This class specifies a scheme for implementing the model, as well as
     providing the optimisation routine.
@@ -24,7 +24,7 @@ class CollapsedVB(GPy.core.Model):
 
     def __init__(self, name):
         """"""
-        GPy.core.Model.__init__(self, name)
+        GPflow.model.Model.__init__(self, name)
 
         self.hyperparam_interval=50
 
@@ -35,7 +35,6 @@ class CollapsedVB(GPy.core.Model):
                 'clear_after_finish': True}
 
     def randomize(self):
-        GPy.core.Model.randomize(self)
         self.set_vb_param(np.random.randn(self.get_vb_param().size))
 
     def get_vb_param(self):
@@ -82,58 +81,6 @@ class CollapsedVB(GPy.core.Model):
         assert method in ['FR', 'PR','HS','steepest'], 'invalid conjugate gradient method specified.'
 
         ## For GPy style notebook verbosity
-
-        if verbose:
-            try:
-                from IPython.display import display
-                from IPython.html.widgets import IntProgress, HTML, Box, VBox, HBox, FlexBox
-                self.text = HTML(width='100%')
-                self.progress = IntProgress(min=0, max=maxiter)
-                self.progress.bar_style = 'info'
-                self.status = 'Running'
-
-                html_begin = """<style type="text/css">
-                .tg-opt  {font-family:"Courier New", Courier, monospace !important;padding:2px 3px;word-break:normal;border-collapse:collapse;border-spacing:0;border-color:#DCDCDC;margin:0px auto;width:100%;}
-                .tg-opt td{font-family:"Courier New", Courier, monospace !important;font-weight:bold;color:#444;background-color:#F7FDFA;border-style:solid;border-width:1px;overflow:hidden;word-break:normal;border-color:#DCDCDC;}
-                .tg-opt th{font-family:"Courier New", Courier, monospace !important;font-weight:normal;color:#fff;background-color:#26ADE4;border-style:solid;border-width:1px;overflow:hidden;word-break:normal;border-color:#DCDCDC;}
-                .tg-opt .tg-left{font-family:"Courier New", Courier, monospace !important;font-weight:normal;text-align:left;}
-                .tg-opt .tg-right{font-family:"Courier New", Courier, monospace !important;font-weight:normal;text-align:right;}
-                </style>
-                <table class="tg-opt">"""
-
-                html_end = "</table>"
-
-                self.ipython_notebook = True
-            except:
-                # Not in Ipython notebook
-                self.ipython_notebook = False
-        else:
-            self.ipython_notebook = False
-
-        if self.ipython_notebook:
-            left_col = VBox(children=[self.progress, self.text], padding=2, width='100%')
-            self.hor_align = FlexBox(children = [left_col], width='100%', orientation='horizontal')
-
-            display(self.hor_align)
-
-            try:
-                self.text.set_css('width', '100%')
-                left_col.set_css({
-                         'padding': '2px',
-                         'width': "100%",
-                         })
-
-                self.hor_align.set_css({
-                         'width': "100%",
-                         })
-
-                self.hor_align.remove_class('vbox')
-                self.hor_align.add_class('hbox')
-
-                left_col.add_class("box-flex1")
-
-            except:
-                pass
 
         self.start = time.time()
         self._time = self.start
@@ -194,100 +141,27 @@ class CollapsedVB(GPy.core.Model):
 
 
             if verbose:
-                if self.ipython_notebook:
-
-                    t = time.time()
-                    seconds = t-self.start
-
-                    self.status = 'Running'
-                    self.progress.bar_style = 'info'
-
-                    names_vals = [['conjugate gradient method', "{:s}".format(method)],
-                                  ['runtime', "{:.1f}s".format(seconds)],
-                                  ['evaluation', "{}".format(iteration)],
-                                  ['objective', "{:12.5f}".format(-bound)],
-                                  ['||gradient||', "{:12.5f}".format(float(squareNorm))],
-                                  ['beta', "{:12.5f}".format(beta)],
-                                  ['status', "{:s}".format(self.status)],
-                                ]
-
-                    html_body = ""
-                    for name, val in names_vals:
-                        html_body += "<tr>"
-                        html_body += "<td class='tg-left'>{}</td>".format(name)
-                        html_body += "<td class='tg-right'>{}</td>".format(val)
-                        html_body += "</tr>"
-
-                    self.progress.value = iteration
-                    self.text.value = html_begin + html_body + html_end
-
-                else:
-                    print('\riteration '+str(iteration)+' bound='+str(bound) + ' grad='+str(squareNorm) + ', beta='+str(beta))
-                    sys.stdout.flush()
+                print('\riteration '+str(iteration)+' bound='+str(bound) + ' grad='+str(squareNorm) + ', beta='+str(beta))
+                sys.stdout.flush()
 
             # Converged yet? try the parameters if so
             if np.abs(bound-bound_old) <= ftol:
                 if verbose:
-                    if self.ipython_notebook:
-                        self.status = 'vb converged (ftol)'
-                        names_vals[-1] = ['status', "{:s}".format(self.status)]
-
-                        html_body = ""
-                        for name, val in names_vals:
-                            html_body += "<tr>"
-                            html_body += "<td class='tg-left'>{}</td>".format(name)
-                            html_body += "<td class='tg-right'>{}</td>".format(val)
-                            html_body += "</tr>"
-
-                        self.text.value = html_begin + html_body + html_end
-                        self.progress.bar_style = 'success'
-
-                    else:
-                        print('vb converged (ftol)')
+                    print('vb converged (ftol)')
 
                 if self.optimize_parameters() < 1e-1:
                     break
 
             if squareNorm <= gtol:
                 if verbose:
-                    if self.ipython_notebook:
-                        self.status = 'vb converged (gtol)'
-                        names_vals[-1] = ['status', "{:s}".format(self.status)]
-
-                        html_body = ""
-                        for name, val in names_vals:
-                            html_body += "<tr>"
-                            html_body += "<td class='tg-left'>{}</td>".format(name)
-                            html_body += "<td class='tg-right'>{}</td>".format(val)
-                            html_body += "</tr>"
-
-                        self.text.value = html_begin + html_body + html_end
-                        self.progress.bar_style = 'success'
-
-                    else:
-                        print('vb converged (gtol)')
+                    print('vb converged (gtol)')
 
                 if self.optimize_parameters() < 1e-1:
                     break
 
             if iteration >= maxiter:
                 if verbose:
-                    if self.ipython_notebook:
-                        self.status = 'maxiter exceeded'
-                        names_vals[-1] = ['status', "{:s}".format(self.status)]
-
-                        html_body = ""
-                        for name, val in names_vals:
-                            html_body += "<tr>"
-                            html_body += "<td class='tg-left'>{}</td>".format(name)
-                            html_body += "<td class='tg-right'>{}</td>".format(val)
-                            html_body += "</tr>"
-
-                        self.text.value = html_begin + html_body + html_end
-                        self.progress.bar_style = 'warning'
-
-                    else:
-                        print('maxiter exceeded')
+                    print('maxiter exceeded')
                 break
 
             #store essentials of previous iteration
@@ -301,12 +175,6 @@ class CollapsedVB(GPy.core.Model):
                 self.optimize_parameters()
 
             bound_old = bound
-
-        # Clean up temporary fields after optimization
-        if self.ipython_notebook:
-            del self.text
-            del self.progress
-            del self.hor_align
 
 
 
