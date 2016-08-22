@@ -2,14 +2,14 @@
 # Licensed under the GPL v3 (see LICENSE.txt)
 
 import numpy as np
-from .collapsed_mixture import CollapsedMixture
-import GPy
+from collapsed_mixture import CollapsedMixture
+import GPflow
 from GPy.util.linalg import mdot, pdinv, backsub_both_sides, dpotrs, jitchol, dtrtrs
 
 try:
-    from .utilities import multiple_mahalanobis
+    from utilities import multiple_mahalanobis
 except ImportError:
-    from .np_utilities import multiple_mahalanobis_numpy_loops as multiple_mahalanobis
+    from np_utilities import multiple_mahalanobis_numpy_loops as multiple_mahalanobis
 
 class MOHGP(CollapsedMixture):
     """
@@ -30,14 +30,14 @@ class MOHGP(CollapsedMixture):
     name     - A convenient string for printing the model (default MOHGP)
 
     """
-    def __init__(self, X, kernF, kernY, Y, K=2, alpha=1., prior_Z='symmetric', name='MOHGP'):
+    def __init__(self, X, kernF, kernY, Y, num_clusters=2, alpha=1., prior_Z='symmetric', name='MOHGP'):
 
-        N, self.D = Y.shape
+        num_data, self.D = Y.shape
         self.Y = Y
         self.X = X
         assert X.shape[0]==self.D, "input data don't match observations"
 
-        CollapsedMixture.__init__(self, N, K, prior_Z, alpha, name)
+        CollapsedMixture.__init__(self, num_data, num_clusters, prior_Z, alpha, name)
 
         self.kernF = kernF
         self.kernY = kernY
@@ -114,7 +114,7 @@ class MOHGP(CollapsedMixture):
         Byks = [np.dot(Bi,yk) for Bi,yk in zip(B_invs,self.ybark.T)]
         tmp = sum([np.dot(Byk[:,None],Byk[None,:])/np.power(ph_k,3)\
                 -Syi_ybarkybarkT_Syi/ph_k -Bi/ph_k for Bi, Byk, yyT, ph_k, Syi_ybarkybarkT_Syi in zip(B_invs, Byks, ybarkybarkT, self.phi_hat, self.Syi_ybarkybarkT_Syi) if ph_k >1e-6])
-        tmp += (self.K - self.N) * self.Sy_inv
+        tmp += (self.num_clusters - self.num_data) * self.Sy_inv
         tmp += mdot(self.Sy_inv,self.YTY,self.Sy_inv)
         tmp /= 2.
 
@@ -126,9 +126,9 @@ class MOHGP(CollapsedMixture):
         Compute the lower bound on the marginal likelihood (conditioned on the
         GP hyper parameters).
         """
-        return -0.5 * ( self.N * self.D * np.log(2. * np.pi) \
+        return -0.5 * ( self.num_data * self.D * np.log(2. * np.pi) \
                         + self.log_det_diff.sum() \
-                        + self.N * self.Sy_logdet \
+                        + self.num_data * self.Sy_logdet \
                         + np.sum(self.YTY * self.Sy_inv) ) \
                + 0.5 * np.sum(self.Syi_ybarkybarkT_Syi * self.Lambda_inv) \
                + self.mixing_prop_bound() \
@@ -214,8 +214,6 @@ class MOHGP(CollapsedMixture):
             fig = plt.figure()
         else:
             fig = plt.gcf()
-        Tango = GPy.plotting.Tango
-        Tango.reset()
 
         if data_in_replicate:
             X_ = self.X[:, free_dims].flatten()
@@ -266,10 +264,7 @@ class MOHGP(CollapsedMixture):
                 if on_subplots:
                     ax = fig.add_subplot(Nx,Ny,subplot_count+1)
                     subplot_count += 1
-                if colour:
-                    col = Tango.nextMedium()
-                else:
-                    col='k'
+                col='k'
                 if joined:
                     if data_in_grey:
                         ax.plot(X,Y[ii].T,'k',marker=None, linewidth=0.2,alpha=0.4)
