@@ -4,13 +4,13 @@
 import numpy as np
 
 try:
-    from .utilities import multiple_pdinv, lngammad
+    from utilities import multiple_pdinv, lngammad
 except ImportError:
-    from .np_utilities import multiple_pdinv, lngammad
+    from np_utilities import multiple_pdinv, lngammad
     
 from scipy.special import gammaln, digamma
 from scipy import stats
-from .collapsed_mixture import CollapsedMixture
+from collapsed_mixture import CollapsedMixture
 
 class MOG(CollapsedMixture):
     """
@@ -19,7 +19,7 @@ class MOG(CollapsedMixture):
     Arguments
     =========
     X - a np.array of the observed data: each row contains one datum.
-    K - the number of clusters (or initial number of clusters in the Dirichlet Process case)
+    num_clusters - the number of clusters (or initial number of clusters in the Dirichlet Process case)
     alpha - the A priori dirichlet concentrationn parameter (default 1.)
     prior_Z  - either 'symmetric' or 'DP', specifies whether to use a symmetric Dirichlet prior for the clusters, or a (truncated) Dirichlet process.
     name - a convenient string for printing the model (default MOG)
@@ -31,9 +31,9 @@ class MOG(CollapsedMixture):
     prior_v - prior Wishart degrees of freedom (defaults to dimension of the problem +1.)
 
     """
-    def __init__(self, X, K=2, prior_Z='symmetric', alpha=1., prior_m=None, prior_kappa=1e-6, prior_S=None, prior_v=None, name='MOG'):
+    def __init__(self, X, num_clusters=2, prior_Z='symmetric', alpha=1., prior_m=None, prior_kappa=1e-6, prior_S=None, prior_v=None, name='MOG'):
         self.X = X
-        self.N, self.D = X.shape
+        self.num_data, self.D = X.shape
 
         # store the prior cluster parameters
         self.m0 = self.X.mean(0) if prior_m is None else prior_m
@@ -46,7 +46,7 @@ class MOG(CollapsedMixture):
         self.XXT = self.X[:,:,np.newaxis]*self.X[:,np.newaxis,:]
         self.S0_halflogdet = np.sum(np.log(np.sqrt(np.diag(np.linalg.cholesky(self.S0)))))
 
-        CollapsedMixture.__init__(self, self.N, K, prior_Z, alpha, name=name)
+        CollapsedMixture.__init__(self, self.num_data, K, prior_Z, alpha, name=name)
         self.do_computations()
 
     def do_computations(self):
@@ -63,11 +63,11 @@ class MOG(CollapsedMixture):
     def bound(self):
         """Compute the lower bound on the model evidence.  """
         return -0.5*self.D*np.sum(np.log(self.kNs/self.k0))\
-            +self.K*self.v0*self.S0_halflogdet - np.sum(self.vNs*self.Sns_halflogdet)\
-            +np.sum(lngammad(self.vNs, self.D))- self.K*lngammad(self.v0, self.D)\
+            +self.num_clusters*self.v0*self.S0_halflogdet - np.sum(self.vNs*self.Sns_halflogdet)\
+            +np.sum(lngammad(self.vNs, self.D))- self.num_clusters*lngammad(self.v0, self.D)\
             +self.mixing_prop_bound()\
             +self.H\
-            -0.5*self.N*self.D*np.log(np.pi)
+            -0.5*self.num_data*self.D*np.log(np.pi)
 
     def vb_grad_natgrad(self):
         """Gradients of the bound"""

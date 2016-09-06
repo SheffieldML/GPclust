@@ -4,12 +4,9 @@
 import numpy as np
 from collapsed_mixture import CollapsedMixture
 import GPflow
-from GPy.util.linalg import mdot, pdinv, backsub_both_sides, dpotrs, jitchol, dtrtrs
+#from GPy.util.linalg import mdot, pdinv, backsub_both_sides, dpotrs, jitchol, dtrtrs
+import tensorflow as tf
 
-try:
-    from utilities import multiple_mahalanobis
-except ImportError:
-    from np_utilities import multiple_mahalanobis_numpy_loops as multiple_mahalanobis
 
 class MOHGP(CollapsedMixture):
     """
@@ -23,8 +20,8 @@ class MOHGP(CollapsedMixture):
     =========
     X        - The times of observation of the time series in a (Tx1) np.array
     Y        - A np.array of the observed time-course values: each row contains a time series, each column represents a unique time point
-    kernF    - A GPy kernel to model the mean function of each cluster
-    kernY    - A GPy kernel to model the deviation of each of the time courses from the mean fro teh cluster
+    kernF    - A GPflow kernel to model the mean function of each cluster
+    kernY    - A GPflow kernel to model the deviation of each of the time courses from the mean of the cluster
     alpha    - The a priori Dirichlet concentrationn parameter (default 1.)
     prior_Z  - Either 'symmetric' or 'dp', specifies whether to use a symmetric dirichelt prior for the clusters, or a (truncated) Dirichlet Process.
     name     - A convenient string for printing the model (default MOHGP)
@@ -33,38 +30,48 @@ class MOHGP(CollapsedMixture):
     def __init__(self, X, kernF, kernY, Y, num_clusters=2, alpha=1., prior_Z='symmetric', name='MOHGP'):
 
         num_data, self.D = Y.shape
-        self.Y = Y
-        self.X = X
+        self.Y = GPflow.param.DataHolder(Y, on_shape_change='pass')
+        self.Y.name='Y'
+        self.X = GPflow.param.DataHolder(X, on_shape_change='pass')
         assert X.shape[0]==self.D, "input data don't match observations"
 
         CollapsedMixture.__init__(self, num_data, num_clusters, prior_Z, alpha, name)
+        # CollapsedMixture returns the initialization of the variational parameters, so let's 
+        # convert them to a tensorflow DataHolder
+        self.tfphi = GPflow.param.DataHolder(self.phi)
+        self.tfphi_hat = GPflow.param.DataHolder(self.phi_hat)
 
         self.kernF = kernF
         self.kernY = kernY
-        self.link_parameters(self.kernF, self.kernY)
-
+        self.LOG2PI = np.log(2.*np.pi)
         #initialize kernels
-        self.Sf = self.kernF.K(self.X)
-        self.Sy = self.kernY.K(self.X)
-        self.Sy_inv, self.Sy_chol, self.Sy_chol_inv, self.Sy_logdet = pdinv(self.Sy+np.eye(self.D)*1e-6)
+        with self.tf_mode():
+            self.Sf = self.kernF.K(self.X)
+            self.Sy = self.kernY.K(self.X)
+
+            self.Sy_chol = tf.cholesky(self.Sy + GPflow.tf_hacks.eye(self.D)*1e-6)
+            self.Sy_logdet = 2.*tf.reduce_sum(tf.log(tf.diag_part(self.Sy_chol)))
+            self.Sy_inv = tf.matrix_triangular_solve(self.Sy_chol,GPflow.tf_hacks.eye(self.D), lower=True)
 
         #Computations that can be done outside the optimisation loop
-        self.YYT = self.Y[:,:,np.newaxis]*self.Y[:,np.newaxis,:]
-        self.YTY = np.dot(self.Y.T,self.Y)
+        self.YYT = GPflow.param.DataHolder(Y[:,:,np.newaxis]*Y[:,np.newaxis,:])
+        self.YTY = GPflow.param.DataHolder(np.dot(Y.T,Y))
 
         self.do_computations()
 
 
     def parameters_changed(self):
         """ Set the kernel parameters. Note that the variational parameters are handled separately."""
-        #get the latest kernel matrices, decompose
-        self.Sf = self.kernF.K(self.X)
-        self.Sy = self.kernY.K(self.X)
-        self.Sy_inv, self.Sy_chol, self.Sy_chol_inv, self.Sy_logdet = pdinv(self.Sy+np.eye(self.D)*1e-6)
+        with self.tf_mode():
+            self.Sf = self.kernF.K(self.X)
+            self.Sy = self.kernY.K(self.X)
+
+            self.Sy_chol = tf.cholesky(self.Sy + GPflow.tf_hacks.eye(self.D)*1e-6)
+            self.Sy_logdet = 2.*tf.reduce_sum(tf.log(tf.diag_part(self.Sy_chol)))
+            self.Sy_inv = tf.matrix_triangular_solve(self.Sy_chol,GPflow.tf_hacks.eye(self.D), lower=True)
 
         #update everything
         self.do_computations()
-        self.update_kern_grads()
 
 
     def do_computations(self):
@@ -73,226 +80,75 @@ class MOHGP(CollapsedMixture):
         or the variational parameters are changed.
         """
         #sufficient stats.
-        self.ybark = np.dot(self.phi.T,self.Y).T
+        with self.tf_mode():
+            self.tfphi = GPflow.param.DataHolder(self.phi)
+            self.tfphi_hat = GPflow.param.DataHolder(self.phi_hat)
+            
+            self.ybark = tf.transpose(tf.matmul(tf.transpose(self.tfphi),self.Y))
 
-        # compute posterior variances of each cluster (lambda_inv)
-        tmp = backsub_both_sides(self.Sy_chol, self.Sf, transpose='right')
-        self.Cs = [np.eye(self.D) + tmp*phi_hat_i for phi_hat_i in self.phi_hat]
+            # compute posterior variances of each cluster (lambda_inv)
+            #tmp = backsub_both_sides(self.Sy_chol, self.Sf, transpose='right')
+            tmp1 = tf.matrix_triangular_solve(self.Sy_chol, self.Sf, lower=True)
+            tmp = tf.transpose(tf.matrix_triangular_solve(self.Sy_chol,tf.transpose(tmp1),lower=True))
 
-        self._C_chols = [jitchol(C) for C in self.Cs]
-        self.log_det_diff = np.array([2.*np.sum(np.log(np.diag(L))) for L in self._C_chols])
-        tmp = [dtrtrs(L, self.Sy_chol.T, lower=1)[0] for L in self._C_chols]
-        self.Lambda_inv = np.array([( self.Sy - np.dot(tmp_i.T, tmp_i) )/phi_hat_i if (phi_hat_i>1e-6) else self.Sf for phi_hat_i, tmp_i in zip(self.phi_hat, tmp)])
+            # a num_clustersxDxD series of identity matrices
+            Id = tf.tile(tf.expand_dims(GPflow.tf_hacks.eye(self.D), 0), [self.num_clusters, 1, 1])  
+            self.Cs =  Id * tf.reshape(self.tfphi_hat, [self.num_clusters, 1, 1])
+            self.C_chols = tf.batch_cholesky(self.Cs)
+    
+            self.log_det_diff_sum = 0. 
 
-        #posterior mean and other useful quantities
-        self.Syi_ybark, _ = dpotrs(self.Sy_chol, self.ybark, lower=1)
-        self.Syi_ybarkybarkT_Syi = self.Syi_ybark.T[:,None,:]*self.Syi_ybark.T[:,:,None]
-        self.muk = (self.Lambda_inv*self.Syi_ybark.T[:,:,None]).sum(1).T
+            # ----- Need to fix below 2 lines
+            #for i in range(self.num_clusters):
+            #    self.log_det_diff_sum += 2.*tf.reduce_sum(tf.log(tf.diag_part(self.C_chols[i])))
 
-    def update_kern_grads(self):
-        """
-        Set the derivative of the lower bound wrt the (kernel) parameters
-        """
+            tmp = tf.batch_matrix_triangular_solve(self.C_chols,tf.tile(tf.expand_dims(self.Sy_chol,0),[self.num_clusters,1,1]),lower=True)
+            tmp2 = tf.batch_matmul(tf.batch_matrix_transpose(tmp),tmp)
+            self.Lambda_inv = (tf.tile(tf.expand_dims(self.Sy, 0),[self.num_clusters,1,1]) - tmp2) / tf.reshape(self.tfphi_hat, [-1, 1, 1]) 
+                
+            # It appears we only need self.muk for the vb_grad_natgrad function.  Since tf will take care of the derivatives, 
+            #do we need this anymore? -- NO
+            #self.muk[i] = tf.mul(self.Lambda_inv,tf.transpose(self.Syi_ybark)[:,:,None]) # ???
 
-        tmp = [dtrtrs(L, self.Sy_chol_inv, lower=1)[0] for L in self._C_chols]
-        B_invs = [phi_hat_i*np.dot(tmp_i.T, tmp_i) for phi_hat_i, tmp_i in zip(self.phi_hat, tmp)]
-        #B_invs = [phi_hat_i*mdot(self.Sy_chol_inv.T,Ci,self.Sy_chol_inv) for phi_hat_i, Ci in zip(self.phi_hat,self.C_invs)]
+            #posterior mean and other useful quantities
+            self.Syi_ybark = tf.matrix_triangular_solve(self.Sy_chol,self.ybark, lower=True)
+            self.Syi_ybarkybarkT_Syi = tf.mul(tf.expand_dims(tf.transpose(self.Syi_ybark),1),tf.expand_dims(tf.transpose(self.Syi_ybark),2))
 
-        #heres the mukmukT*Lambda term
-        LiSfi = [np.eye(self.D)-np.dot(self.Sf,Bi) for Bi in B_invs]#seems okay
-        tmp1 = [np.dot(LiSfik.T,Sy_inv_ybark_k) for LiSfik, Sy_inv_ybark_k in zip(LiSfi,self.Syi_ybark.T)]
-        tmp = 0.5*sum([np.dot(tmpi[:,None],tmpi[None,:]) for tmpi in tmp1])
-
-        #here's the difference in log determinants term
-        tmp += -0.5*sum(B_invs)
-
-        #kernF_grads = np.array([np.sum(tmp*g) for g in self.kernF.extract_gradients()]) # OKAY!
-        self.kernF.update_gradients_full(dL_dK=tmp,X=self.X)
-
-        #gradient wrt Sigma_Y
-        ybarkybarkT = self.ybark.T[:,None,:]*self.ybark.T[:,:,None]
-        Byks = [np.dot(Bi,yk) for Bi,yk in zip(B_invs,self.ybark.T)]
-        tmp = sum([np.dot(Byk[:,None],Byk[None,:])/np.power(ph_k,3)\
-                -Syi_ybarkybarkT_Syi/ph_k -Bi/ph_k for Bi, Byk, yyT, ph_k, Syi_ybarkybarkT_Syi in zip(B_invs, Byks, ybarkybarkT, self.phi_hat, self.Syi_ybarkybarkT_Syi) if ph_k >1e-6])
-        tmp += (self.num_clusters - self.num_data) * self.Sy_inv
-        tmp += mdot(self.Sy_inv,self.YTY,self.Sy_inv)
-        tmp /= 2.
-
-        #kernY_grads = np.array([np.sum(tmp*g) for g in self.kernY.extract_gradients()])
-        self.kernY.update_gradients_full(dL_dK=tmp, X=self.X)
+    def log_likelihood(self):
+        # tensorflow edition of bound()
+        # gets picked up automatically by tensorflow due to naming convention
+        with self.tf_mode():
+            return -0.5 * ( self.num_data * self.D * self.LOG2PI \
+               + self.log_det_diff_sum + self.num_data* self.Sy_logdet )#\
+               #+ tf.reduce_sum(tf.mul(self.YTY,self.Sy_inv)) ) #\
+               #+ 0.5 * tf.reduce_sum(tf.mul(self.Syi_ybarkybarkT_Syi,self.Lambda_inv)) #\
+               #+ self.mixing_prop_bound() + self.H
 
     def bound(self):
         """
         Compute the lower bound on the marginal likelihood (conditioned on the
         GP hyper parameters).
         """
-        return -0.5 * ( self.num_data * self.D * np.log(2. * np.pi) \
-                        + self.log_det_diff.sum() \
-                        + self.num_data * self.Sy_logdet \
-                        + np.sum(self.YTY * self.Sy_inv) ) \
-               + 0.5 * np.sum(self.Syi_ybarkybarkT_Syi * self.Lambda_inv) \
-               + self.mixing_prop_bound() \
-               + self.H
+        ll = self.log_likelihood()
+        feed_dict = self.get_feed_dict()
+        for w in feed_dict.keys():
+            print w.name
+        return self._session.run(ll,feed_dict=feed_dict)
+
+    #def optimize_vb(self,args):
+    #    compile_vb()
+    #    self.optimize(args)
 
     def vb_grad_natgrad(self):
         """
         Natural Gradients of the bound with respect to phi, the variational
         parameters controlling assignment of the data to clusters
         """
-        #yn_mk = self.Y[:,:,None] - self.muk[None,:,:]
-        #ynmk2 = np.sum(np.dot(self.Sy_inv, yn_mk) * np.rollaxis(yn_mk,0,2),0)
-        ynmk2 = multiple_mahalanobis(self.Y, self.muk.T, self.Sy_chol)
-
-        grad_phi = (self.mixing_prop_bound_grad() -
-                    0.5 * np.sum(np.sum(self.Lambda_inv * self.Sy_inv[None, :, :], 1), 1)) + \
-                   ( self.Hgrad - 0.5 * ynmk2 ) # parentheses are for operation ordering!
-
-        natgrad = grad_phi - np.sum(self.phi*grad_phi,1)[:,None]
-        grad = natgrad*self.phi
-
-        return grad.flatten(), natgrad.flatten()
-
-
-    def predict_components(self,Xnew):
-        """The predictive density under each component"""
-
-        tmp = [dtrtrs(L, self.Sy_chol_inv, lower=1)[0] for L in self._C_chols]
-        B_invs = [phi_hat_i*np.dot(tmp_i.T, tmp_i) for phi_hat_i, tmp_i in zip(self.phi_hat, tmp)]
-        kx= self.kernF.K(self.X,Xnew)
-        try:
-            kxx = self.kernF.K(Xnew) + self.kernY.K(Xnew)
-        except TypeError:
-            #kernY has a hierarchical structure that we should deal with
-            con = np.ones((Xnew.shape[0],self.kernY.connections.shape[1]))
-            kxx = self.kernF.K(Xnew) + self.kernY.K(Xnew,con)
-
-        #prediction as per my notes
-        tmp = [np.eye(self.D) - np.dot(Bi,self.Sf) for Bi in B_invs]
-        mu = [mdot(kx.T,tmpi,self.Sy_inv,ybark) for tmpi,ybark in zip(tmp,self.ybark.T)]
-        var = [kxx - mdot(kx.T,Bi,kx) for Bi in B_invs]
-
-        return mu,var
-
-    def plot_simple(self):
-        from matplotlib import pyplot as plt
-        assert self.X.shape[1]==1, "can only plot mixtures of 1D functions"
-        #plt.figure()
-        plt.plot(self.Y.T,'k',linewidth=0.5,alpha=0.4)
-        plt.plot(self.muk[:,self.phi_hat>1e-3],'k',linewidth=2)
-
-    def plot(self, on_subplots=True, colour=False, newfig=True, errorbars=False, in_a_row=False, joined=True, gpplot=True,min_in_cluster=1e-3, data_in_grey=False, numbered=True, data_in_replicate=False, fixed_inputs=[], ylim=None):
-        """
-        Plot the mixture of Gaussian processes. Some of these arguments are rather esoteric! The defaults should be okay for most cases.
-
-        Arguments
-        ---------
-
-        on_subplots (bool) whether to plot all the clusters on separate subplots (True), or all on the same plot (False)
-        colour      (bool) to cycle through colours (True) or plot in black nd white (False)
-        newfig      (bool) whether to make a new matplotlib figure(True) or use the current figure (False)
-        in_a_row    (bool) if true, plot the subplots (if using) in a single row. Else make the subplots approximately square.
-        joined      (bool) if true, connect the data points with lines
-        gpplot      (bool) if true, plto the posterior of the GP for each cluster.
-        min_in_cluster (float) ignore clusterse with less total assignemnt than this
-        data_in_grey (bool) whether the data should be plotted in black and white.
-        numbered    (bool) whether to include numbers on the top-right of each subplot.
-        data_in_replicate (bool) whether to assume the data are in replicate, and plot the mean of each replicate instead of each data point
-        fixed_inputs (list of tuples, as GPy.GP.plot) for GPs defined on more that one input, we'll plot a slice of the GP. this list defines how to fix the remaining inputs.
-        ylim        (tuple) the limits to set on the y-axes.
-
-        """
-
-        from matplotlib import pyplot as plt
-
-        #work out what input dimensions to plot
-        fixed_dims = np.array([i for i,v in fixed_inputs])
-        free_dims = np.setdiff1d(np.arange(self.X.shape[1]),fixed_dims)
-        assert len(free_dims)==1, "can only plot mixtures of 1D functions"
-
-        #figure, subplots
-        if newfig:
-            fig = plt.figure()
-        else:
-            fig = plt.gcf()
-
-        if data_in_replicate:
-            X_ = self.X[:, free_dims].flatten()
-            X = np.unique(X_).reshape(-1,1)
-            Y = np.vstack([self.Y[:,X_==x].mean(1) for x in X.flatten()]).T
-
-        else:
-            Y = self.Y
-            X = self.X[:,free_dims]
-
-        #find some sensible y-limits for the plotting
-        if ylim is None:
-            ymin,ymax = Y.min(), Y.max()
-            ymin,ymax = ymin-0.1*(ymax-ymin), ymax+0.1*(ymax-ymin)
-        else:
-            ymin, ymax = ylim
-
-        #work out how many clusters we're going to plot.
-        Ntotal = np.sum(self.phi_hat > min_in_cluster)
-        if on_subplots:
-            if in_a_row:
-                Nx = 1
-                Ny = Ntotal
-            else:
-                Nx = np.floor(np.sqrt(Ntotal))
-                Ny = int(np.ceil(Ntotal/Nx))
-                Nx = int(Nx)
-        else:
-            ax = plt.gca() # this seems to make new ax if needed
-
-        #limits of GPs
-        xmin,xmax = X.min(), X.max()
-        xmin,xmax = xmin-0.1*(xmax-xmin), xmax+0.1*(xmax-xmin)
-
-        Xgrid = np.empty((300,self.X.shape[1]))
-        Xgrid[:,free_dims] = np.linspace(xmin,xmax,300)[:,None]
-        for i,v in fixed_inputs:
-            Xgrid[:,i] = v
-
-
-        subplot_count = 0
-        for i, ph, mu, var in zip(range(self.K), self.phi_hat, *self.predict_components(Xgrid)):
-            if ph>(min_in_cluster):
-                ii = np.argmax(self.phi,1)==i
-                num_in_clust = np.sum(ii)
-                if not np.any(ii):
-                    continue
-                if on_subplots:
-                    ax = fig.add_subplot(Nx,Ny,subplot_count+1)
-                    subplot_count += 1
-                col='k'
-                if joined:
-                    if data_in_grey:
-                        ax.plot(X,Y[ii].T,'k',marker=None, linewidth=0.2,alpha=0.4)
-                    else:
-                        ax.plot(X,Y[ii].T,col,marker=None, linewidth=0.2,alpha=1)
-                else:
-                    if data_in_grey:
-                        ax.plot(X,Y[ii].T,'k',marker='.', linewidth=0.0,alpha=0.4)
-                    else:
-                        ax.plot(X,Y[ii].T,col,marker='.', linewidth=0.0,alpha=1)
-
-                if gpplot:
-                    _ = None
-                    helper_data = [_, free_dims, Xgrid, _, _, _, _, _]
-                    helper_prediction = [mu[:,None], [(mu-2.*np.sqrt(np.diag(var)))[:,None],(mu+2.*np.sqrt(np.diag(var)))[:,None]], _]
-                    GPy.plotting.gpy_plot.gp_plots._plot_mean(None, ax, helper_data, helper_prediction, color=col)
-                    GPy.plotting.gpy_plot.gp_plots._plot_confidence(None, ax, helper_data, helper_prediction, None, color=col)
-
-
-                if numbered and on_subplots:
-                    ax.text(1,1,str(int(num_in_clust)),transform=ax.transAxes,ha='right',va='top',bbox={'ec':'k','lw':1.3,'fc':'w'})
-
-                err = 2*np.sqrt(np.diag(self.Lambda_inv[i,:,:]))
-                if errorbars:ax.errorbar(self.X.flatten(), self.muk[:,i], yerr=err,ecolor=col, elinewidth=2, linewidth=0)
-
-                ax.set_ylim(ymin, ymax)
-
-        if on_subplots:
-            GPy.plotting.matplot_dep.util.align_subplots(Nx,Ny,xlim=(xmin,xmax), ylim=(ymin, ymax))
-        else:
-            ax.set_xlim(xmin,xmax)
+        with self.tf_mode():
+            bound = self.log_likelihood()
+            grad_phi = tf.gradients(bound,self.tfphi)
+            # replicate np.sum(self.phi*grad_phi,1)
+            A = tf.matmul( tf.mul(self.tfphi,grad_phi),tf.ones(tf.Tensor.get_shape(self.tfphi)[0]) )
+            natgrad = tf.sub(grad_phi,tf.expand_dims(A,1))
+            grad = tf.mul(natgrad,self.tfphi) 
+            return self._session.run([bound,grad,natgrad])

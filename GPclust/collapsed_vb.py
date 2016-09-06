@@ -5,6 +5,7 @@ import numpy as np
 import GPflow
 import time
 import sys #for flushing
+
 from numpy.linalg.linalg import LinAlgError
 class LinAlgWarning(Warning):
     pass
@@ -14,8 +15,8 @@ class CollapsedVB(GPflow.model.Model):
     A base class for collapsed variational models, using the GPflow framework for
     non-variational parameters.
 
-    Optimisation of the (collapsed) variational paremters is performed by
-    Riemannian conjugate-gradient ascent, interleaved with optimisation (in tensorfow)
+    Optimisation of the (collapsed) variational parameters is performed by
+    Riemannian conjugate-gradient ascent, interleaved with optimization (in tensorfow)
     of the non-variational parameters
 
     This class specifies a scheme for implementing the model, as well as
@@ -80,13 +81,6 @@ class CollapsedVB(GPflow.model.Model):
 
         assert method in ['FR', 'PR','HS','steepest'], 'invalid conjugate gradient method specified.'
 
-        ## For GPy style notebook verbosity
-
-        self.start = time.time()
-        self._time = self.start
-
-        ## ---
-
         iteration = 0
         bound_old = self.bound()
         searchDir_old = 0.
@@ -96,7 +90,7 @@ class CollapsedVB(GPflow.model.Model):
             if callback is not None:
                 callback()
 
-            grad,natgrad = self.vb_grad_natgrad()
+            bound,grad,natgrad = self.vb_grad_natgrad()
             grad,natgrad = -grad,-natgrad
             squareNorm = np.dot(natgrad,grad) # used to monitor convergence
 
@@ -138,7 +132,6 @@ class CollapsedVB(GPflow.model.Model):
                     bound = self.bound()
                     iteration_failed = False
                 iteration += 1
-
 
             if verbose:
                 print('\riteration '+str(iteration)+' bound='+str(bound) + ' grad='+str(squareNorm) + ', beta='+str(beta))
@@ -185,7 +178,7 @@ class CollapsedVB(GPflow.model.Model):
         """
         if self.optimizer_array.size>0:
             start = self.bound()
-            GPy.core.model.Model.optimize(self,**self.hyperparam_opt_args)
-            return self.bound()-start
+            GPflow.Model.model.optimize(self,**self.hyperparam_opt_args)
+            return self.bound() - start
         else:
             return 0.

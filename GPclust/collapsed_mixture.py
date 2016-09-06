@@ -3,11 +3,7 @@
 
 import numpy as np
 
-try:
-    from utilities import ln_dirichlet_C, softmax_weave
-except ImportError:
-    from np_utilities import ln_dirichlet_C
-    from np_utilities import softmax_numpy as softmax_weave
+from tf_utilities import  ln_dirichlet_C, softmax
 
 from scipy.special import gammaln, digamma
 from collapsed_vb import CollapsedVB
@@ -39,7 +35,7 @@ class CollapsedMixture(CollapsedVB):
 
         #random initial conditions for the vb parameters
         self.phi_ = np.random.randn(self.num_data, self.num_clusters)
-        self.phi, logphi, self.H = softmax_weave(self.phi_)
+        self.phi, logphi, self.H = softmax(self.phi_)
         self.phi_hat = self.phi.sum(0)
         self.Hgrad = -logphi
         if self.prior_Z == 'DP':
@@ -51,7 +47,7 @@ class CollapsedMixture(CollapsedVB):
         Accept a vector representing the variatinoal parameters, and reshape it into self.phi
         """
         self.phi_ = phi_.reshape(self.num_data, self.num_clusters)
-        self.phi, logphi, self.H = softmax_weave(self.phi_)
+        self.phi, logphi, self.H = softmax(self.phi_)
         self.phi_hat = self.phi.sum(0)
         self.Hgrad = -logphi
         if self.prior_Z == 'DP':
@@ -149,25 +145,19 @@ class CollapsedMixture(CollapsedVB):
         self.phi_ = np.hstack((self.phi_,self.phi_.min(1)[:,None]))
         indexN = np.nonzero(self.phi[:,indexK] > threshold)[0]
 
-        #this procedure randomly assigns data to the new and old clusters
-        #rand_indexN = np.random.permutation(indexN)
-        #n = np.floor(indexN.size/2.)
-        #i1 = rand_indexN[:n]
-        #self.phi_[i1,indexK], self.phi_[i1,-1] = self.phi_[i1,-1], self.phi_[i1,indexK]
-        #self.set_vb_param(self.get_vb_param())
-
-        #this procedure equally assigns data to the new and old clusters, aside from one random point, which is in the new cluster
+        # this procedure equally assigns data to the new and old clusters, 
+        # aside from one random point, which is in the new cluster
         special = np.random.permutation(indexN)[0]
         self.phi_[indexN,-1] = self.phi_[indexN,indexK].copy()
         self.phi_[special,-1] = np.max(self.phi_[special])+10
         self.set_vb_param(self.get_vb_param())
 
-
         self.optimize(maxiter=maxiter, verbose=verbose)
         self.remove_empty_clusters()
         bound_new = self.bound()
 
-        bound_increase = bound_new-bound_old
+        bound_increase = bound_new - bound_old
+
         if (bound_increase < 1e-3):
             self.num_clusters = old_num_clusters
             self.set_vb_param(phi_old)
@@ -181,7 +171,6 @@ class CollapsedMixture(CollapsedVB):
             if verbose:print("optimizing new split to convergence:")
             if optimize_params:
                 self.optimize(**optimize_params)
-
             else:
                 self.optimize(maxiter=5000, verbose=verbose)
 
@@ -203,4 +192,3 @@ class CollapsedMixture(CollapsedVB):
             if not k==(self.num_clusters-1):
                 self.recursive_splits(self.num_clusters-1, verbose=verbose, optimize_params=optimize_params)
             self.recursive_splits(k, verbose=verbose, optimize_params=optimize_params)
-
