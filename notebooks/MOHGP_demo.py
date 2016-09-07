@@ -24,12 +24,14 @@ Y = means + np.random.multivariate_normal(np.zeros(Nx),Ky.compute_K(X,X),means.s
 m = MOHGP(X, Kf, Ky, Y, num_clusters=Nclust)
 #m.constrain_positive('')
 
-m.optimize()
-m.preferred_optimizer='bfgs'
-m.systematic_splits()
-m.remove_empty_clusters(1e-3)
-m.plot(1,1,1,0,0,1)
-plt.show()
+print m.vb_bound_grad_natgrad()
+
+#m.optimize()
+#m.preferred_optimizer='bfgs'
+#m.systematic_splits()
+#m.remove_empty_clusters(1e-3)
+#m.plot(1,1,1,0,0,1)
+#plt.show()
 #raw_input('press enter to continue ...')
 
 #and again without structure

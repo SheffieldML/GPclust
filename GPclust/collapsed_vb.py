@@ -90,7 +90,7 @@ class CollapsedVB(GPflow.model.Model):
             if callback is not None:
                 callback()
 
-            bound,grad,natgrad = self.vb_grad_natgrad()
+            bound,grad,natgrad = self.vb_bound_grad_natgrad()
             grad,natgrad = -grad,-natgrad
             squareNorm = np.dot(natgrad,grad) # used to monitor convergence
 
@@ -98,21 +98,21 @@ class CollapsedVB(GPflow.model.Model):
             if (method=='steepest') or not iteration:
                 beta = 0
             elif (method=='PR'):
-                beta = np.dot((natgrad-natgrad_old),grad)/squareNorm_old
+                beta = tf.matmul((natgrad-natgrad_old),grad)/squareNorm_old
             elif (method=='FR'):
                 beta = squareNorm/squareNorm_old
             elif (method=='HS'):
-                beta = np.dot((natgrad-natgrad_old),grad)/np.dot((natgrad-natgrad_old),grad_old)
+                beta = np.matmul((natgrad-natgrad_old),grad) / np.matmul((natgrad-natgrad_old),grad_old)
             if np.isnan(beta) or (beta < 0.):
                 beta = 0.
             searchDir = -natgrad + beta*searchDir_old
 
             # Try a conjugate step
-            phi_old = self.get_vb_param().copy()
+            phi_old = self.get_vb_param()
             try:
                 self.set_vb_param(phi_old + step_length*searchDir)
                 bound = self.bound()
-            except LinAlgError:
+            except LinAlgError: # WHat is the exception in tensorflow?
                 self.set_vb_param(phi_old)
                 bound = bound_old-1
 
@@ -125,7 +125,7 @@ class CollapsedVB(GPflow.model.Model):
                 try:
                     self.set_vb_param(phi_old + step_length*searchDir)
                     bound = self.bound()
-                except LinAlgError:
+                except LinAlgError: # What is the tensorflow exception??
                     import warnings
                     warnings.warn("Caught LinalgError in setting variational parameters, trying to continue with old parameter settings", LinAlgWarning)
                     self.set_vb_param(phi_old)
@@ -138,7 +138,7 @@ class CollapsedVB(GPflow.model.Model):
                 sys.stdout.flush()
 
             # Converged yet? try the parameters if so
-            if np.abs(bound-bound_old) <= ftol:
+            if tf.abs(bound-bound_old) <= ftol:
                 if verbose:
                     print('vb converged (ftol)')
 
@@ -158,9 +158,9 @@ class CollapsedVB(GPflow.model.Model):
                 break
 
             #store essentials of previous iteration
-            natgrad_old = natgrad.copy() # copy: better safe than sorry.
-            grad_old = grad.copy()
-            searchDir_old = searchDir.copy()
+            natgrad_old = natgrad 
+            grad_old = grad 
+            searchDir_old = searchDir
             squareNorm_old = squareNorm
 
             # hyper param_optimisation
@@ -178,6 +178,7 @@ class CollapsedVB(GPflow.model.Model):
         """
         if self.optimizer_array.size>0:
             start = self.bound()
+            # Should convert self.phi to a Dataholder here so as to not optimize it?
             GPflow.Model.model.optimize(self,**self.hyperparam_opt_args)
             return self.bound() - start
         else:

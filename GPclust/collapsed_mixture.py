@@ -2,7 +2,7 @@
 # Licensed under the GPL v3 (see LICENSE.txt)
 
 import numpy as np
-
+import tensorflow as tf
 from tf_utilities import  ln_dirichlet_C, softmax
 
 from scipy.special import gammaln, digamma
@@ -36,10 +36,10 @@ class CollapsedMixture(CollapsedVB):
         #random initial conditions for the vb parameters
         self.phi_ = np.random.randn(self.num_data, self.num_clusters)
         self.phi, logphi, self.H = softmax(self.phi_)
-        self.phi_hat = self.phi.sum(0)
+        self.phi_hat = tf.reduce_sum(self.phi,0)
         self.Hgrad = -logphi
         if self.prior_Z == 'DP':
-            self.phi_tilde_plus_hat = self.phi_hat[::-1].cumsum()[::-1]
+            self.phi_tilde_plus_hat = tf.cumsum(tf.reverse(self.phi_hat),reverse=True)
             self.phi_tilde = self.phi_tilde_plus_hat - self.phi_hat
 
     def set_vb_param(self,phi_):
@@ -48,16 +48,17 @@ class CollapsedMixture(CollapsedVB):
         """
         self.phi_ = phi_.reshape(self.num_data, self.num_clusters)
         self.phi, logphi, self.H = softmax(self.phi_)
-        self.phi_hat = self.phi.sum(0)
+        self.phi_hat = tf.reduce_sum(self.phi,0)
         self.Hgrad = -logphi
         if self.prior_Z == 'DP':
-            self.phi_tilde_plus_hat = self.phi_hat[::-1].cumsum()[::-1]
+            self.phi_tilde_plus_hat = tf.cumsum(tf.reverse(self.phi_hat),reverse=True)
             self.phi_tilde = self.phi_tilde_plus_hat - self.phi_hat
 
         self.do_computations()
 
     def get_vb_param(self):
-        return self.phi_.flatten()
+        #return self.phi_.flatten()
+        return tf.reshape(self.phi,[-1])
 
     def mixing_prop_bound(self):
         """
@@ -66,11 +67,11 @@ class CollapsedMixture(CollapsedVB):
         if self.prior_Z=='symmetric':
             return ln_dirichlet_C(np.ones(self.num_clusters)*self.alpha) -ln_dirichlet_C(self.alpha + self.phi_hat)
         elif self.prior_Z=='DP':
-            A = gammaln(1. + self.phi_hat)
-            B = gammaln(self.alpha + self.phi_tilde)
-            C = gammaln(self.alpha + 1. + self.phi_tilde_plus_hat)
-            D = self.num_clusters*(gammaln(1.+self.alpha) - gammaln(self.alpha))
-            return A.sum() + B.sum() - C.sum() + D
+            A = tf.lgamma(1. + self.phi_hat)
+            B = tf.lgamma(self.alpha + self.phi_tilde)
+            C = tf.gamma(self.alpha + 1. + self.phi_tilde_plus_hat)
+            D = self.num_clusters*(tf.lgamma(1.+self.alpha) - tf.lgamma(self.alpha))
+            return tf.reduce_sum(A) + tf.reduce_sum(B)  - tf.reduce_sum(C) + D
         else:
             raise NotImplementedError("invalid mixing proportion prior type: %s" % self.prior_Z)
 
@@ -95,7 +96,8 @@ class CollapsedMixture(CollapsedVB):
         the bound if the prior type is a DP.
         """
         if self.prior_Z=='DP':
-            i = np.argsort(self.phi_hat)[::-1]
+            i = tf.reverse(tf.nn.top_k(self.phi_hat,k=tf.shape(self.phi_hat)[0]))
+            #i = np.argsort(self.phi_hat)[::-1]
             self.set_vb_param(self.phi_[:,i])
 
     def remove_empty_clusters(self,threshold=1e-6):
@@ -135,7 +137,7 @@ class CollapsedMixture(CollapsedVB):
         if verbose:print("\nattempting to split cluster ", indexK)
 
         bound_old = self.bound()
-        phi_old = self.get_vb_param().copy()
+        phi_old = self.get_vb_param()
         self._optimizer_copy_transformed = False  # Redo transform in case parameters have been unlinked
         param_old = self.optimizer_array.copy()
         old_num_clusters = self.num_clusters
