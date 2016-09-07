@@ -118,7 +118,7 @@ class MOHGP(CollapsedMixture):
         Compute the lower bound on the marginal likelihood (conditioned on the
         GP hyper parameters).
         """
-        return (self.log_likelihood(),name='bound')
+        return tf.mul(tf.constant(1.,dtype=tf.float64),self.log_likelihood(),name='bound') # Hack to name it bound
 	
 
     def vb_bound_grad_natgrad(self):
@@ -127,7 +127,7 @@ class MOHGP(CollapsedMixture):
         parameters controlling assignment of the data to clusters
         """
         with self.tf_mode():
-            bound = self.log_likelihood()
+            bound = self.bound()
             print bound
             print self.phi
             #grad_phi = tf.gradients(bound,self.tfphi)
