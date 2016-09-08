@@ -111,7 +111,7 @@ class CollapsedMixture(CollapsedVB):
 
     def remove_empty_clusters(self, threshold=1e-6):
         """Remove any cluster which has no data assigned to it"""
-        i = self.get_phi_hat() > threshold
+        i = self.get_phihat() > threshold
         new_logphi = self.logphi.value[:, i]
         self.num_clusters = i.sum()
         self.set_vb_param(new_logphi)
