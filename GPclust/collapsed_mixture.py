@@ -1,12 +1,13 @@
-# Copyright (c) 2012, 2013, 2014 James Hensman
+# Copyright (c) 2012, 2013, 2014, 2016 James Hensman, Dan Marthaler
 # Licensed under the GPL v3 (see LICENSE.txt)
+from __future__ import print_function, absolute_import
 
 import numpy as np
 import tensorflow as tf
-from tf_utilities import  ln_dirichlet_C, softmax
+import GPflow
+from .tf_utilities import ln_dirichlet_C
+from .collapsed_vb import CollapsedVB
 
-from scipy.special import gammaln, digamma
-from collapsed_vb import CollapsedVB
 
 class CollapsedMixture(CollapsedVB):
     """
@@ -17,95 +18,103 @@ class CollapsedMixture(CollapsedVB):
     This handles the mixing proportion part of the model,
     as well as providing generic functions for a merge-split approach
     """
-    def __init__(self, num_data, num_clusters, prior_Z='symmetric', alpha=1.0, name='col_mix'):
+    def __init__(self, num_data, num_clusters, prior_Z='symmetric', alpha=1.0):
         """
         Arguments
         =========
         num_data: the number of data
         num_clusters: the (initial) number of cluster (or truncation)
-        prior_Z  - either 'symmetric' or 'DP', specifies whether to use a symmetric Dirichlet prior for the clusters, or a (truncated) Dirichlet Process.
-        alpha: parameter of the Dirichelt (process)
+        prior_Z  - either 'symmetric' or 'DP', specifies whether to use a symmetric
+                   Dirichlet prior for the clusters, or a (truncated) Dirichlet Process.
+        alpha: parameter of the Dirichlet (process)
 
         """
-        CollapsedVB.__init__(self, name)
+        CollapsedVB.__init__(self)
         self.num_data, self.num_clusters = num_data, num_clusters
-        assert prior_Z in ['symmetric','DP']
+        assert prior_Z in ['symmetric', 'DP']
         self.prior_Z = prior_Z
         self.alpha = alpha
 
-        #random initial conditions for the vb parameters
-        self.phi_ = np.random.randn(self.num_data, self.num_clusters)
-        self.phi, logphi, self.H = softmax(self.phi_)
-        self.phi_hat = tf.reduce_sum(self.phi,0)
-        self.Hgrad = -logphi
-        if self.prior_Z == 'DP':
-            self.phi_tilde_plus_hat = tf.cumsum(tf.reverse(self.phi_hat),reverse=True)
-            self.phi_tilde = self.phi_tilde_plus_hat - self.phi_hat
+        # hold the variational parameters in a DataHolder
+        self.logphi = GPflow.param.DataHolder(np.random.randn(self.num_data, self.num_clusters), on_shape_change='pass')
 
-    def set_vb_param(self,phi_):
+    def set_vb_param(self, logphi):
         """
-        Accept a vector representing the variatinoal parameters, and reshape it into self.phi
+        Accept a vector representing the variational parameters, and reshape it into self.phi
         """
-        self.phi_ = phi_.reshape(self.num_data, self.num_clusters)
-        self.phi, logphi, self.H = softmax(self.phi_)
-        self.phi_hat = tf.reduce_sum(self.phi,0)
-        self.Hgrad = -logphi
-        if self.prior_Z == 'DP':
-            self.phi_tilde_plus_hat = tf.cumsum(tf.reverse(self.phi_hat),reverse=True)
-            self.phi_tilde = self.phi_tilde_plus_hat - self.phi_hat
-
-        self.do_computations()
+        self.logphi = logphi.reshape(self.num_data, self.num_clusters)
 
     def get_vb_param(self):
-        #return self.phi_.flatten()
-        return tf.reshape(self.phi,[-1])
+        return self.logphi.value.flatten()
 
-    def mixing_prop_bound(self):
+    def build_KL_Z(self):
         """
         The portion of the bound which is provided by the mixing proportions
+
+        This function returns a tensorflow expression to be used inside build_likelihood
         """
-        if self.prior_Z=='symmetric':
-            return ln_dirichlet_C(np.ones(self.num_clusters)*self.alpha) -ln_dirichlet_C(self.alpha + self.phi_hat)
-        elif self.prior_Z=='DP':
-            A = tf.lgamma(1. + self.phi_hat)
-            B = tf.lgamma(self.alpha + self.phi_tilde)
-            C = tf.gamma(self.alpha + 1. + self.phi_tilde_plus_hat)
-            D = self.num_clusters*(tf.lgamma(1.+self.alpha) - tf.lgamma(self.alpha))
-            return tf.reduce_sum(A) + tf.reduce_sum(B)  - tf.reduce_sum(C) + D
+        phi = tf.nn.softmax(self.logphi)
+        phi_hat = tf.reduce_sum(phi, 0)
+        entropy = -tf.reduce_sum(phi * tf.nn.log_softmax(self.logphi))
+        if self.prior_Z == 'symmetric':
+            return -ln_dirichlet_C(np.ones(self.num_clusters) * self.alpha)\
+                + ln_dirichlet_C(self.alpha + phi_hat)\
+                - entropy
+        elif self.prior_Z == 'DP':
+            phi_tilde_plus_hat = tf.cumsum(tf.reverse(phi_hat), reverse=True)
+            phi_tilde = phi_tilde_plus_hat - phi_hat
+            A = tf.lgamma(1. + phi_hat)
+            B = tf.lgamma(self.alpha + phi_tilde)
+            C = tf.gamma(self.alpha + 1. + phi_tilde_plus_hat)
+            D = self.num_clusters*(tf.lgamma(1. + self.alpha) - tf.lgamma(self.alpha))
+            return -tf.reduce_sum(A)\
+                - tf.reduce_sum(B)\
+                + tf.reduce_sum(C) - D\
+                - entropy
         else:
             raise NotImplementedError("invalid mixing proportion prior type: %s" % self.prior_Z)
 
-    def mixing_prop_bound_grad(self):
+    @GPflow.param.AutoFlow()
+    def get_phihat(self):
+        phi = tf.nn.softmax(self.logphi)
+        phi_hat = tf.reduce_sum(phi, 0)
+        return phi_hat
+
+    @GPflow.param.AutoFlow()
+    def get_phi(self):
+        phi = tf.nn.softmax(self.logphi)
+        return phi
+
+    def bound(self):
+        return self.compute_log_likelihood()
+
+    @GPflow.param.AutoFlow()
+    def vb_bound_grad_natgrad(self):
         """
-        The gradient of the portion of the bound which arises from the mixing
-        proportions, with respect to self.phi
+        Natural Gradients of the bound with respect to the variational
+        parameters controlling assignment of the data to clusters
         """
-        if self.prior_Z=='symmetric':
-            return digamma(self.alpha + self.phi_hat)
-        elif self.prior_Z=='DP':
-            A = digamma(self.phi_hat + 1.)
-            B = np.hstack((0, digamma(self.phi_tilde + self.alpha)[:-1].cumsum()))
-            C = digamma(self.phi_tilde_plus_hat + self.alpha + 1.).cumsum()
-            return A + B - C
-        else:
-            raise NotImplementedError("invalid mixing proportion prior type: %s"%self.prior_Z)
+        bound = self.build_likelihood()
+        grad, = tf.gradients(bound, self.logphi)
+        natgrad = grad / tf.nn.softmax(self.logphi)
+        return bound, tf.reshape(grad, [-1]), tf.reshape(natgrad, [-1])
 
     def reorder(self):
         """
         Re-order the clusters so that the biggest one is first. This increases
         the bound if the prior type is a DP.
         """
-        if self.prior_Z=='DP':
-            i = tf.reverse(tf.nn.top_k(self.phi_hat,k=tf.shape(self.phi_hat)[0]))
-            #i = np.argsort(self.phi_hat)[::-1]
-            self.set_vb_param(self.phi_[:,i])
+        if self.prior_Z == 'DP':
+            phi_hat = self.get_phihat()
+            i = np.argsort(phi_hat)[::-1]
+            self.set_vb_param(self.logphi.value[:, i])
 
-    def remove_empty_clusters(self,threshold=1e-6):
+    def remove_empty_clusters(self, threshold=1e-6):
         """Remove any cluster which has no data assigned to it"""
-        i = self.phi_hat>threshold
-        phi_ = self.phi_[:,i]
+        i = self.get_phi_hat() > threshold
+        new_logphi = self.logphi.value[:, i]
         self.num_clusters = i.sum()
-        self.set_vb_param(phi_)
+        self.set_vb_param(new_logphi)
 
     def try_split(self, indexK=None, threshold=0.9, verbose=True, maxiter=100, optimize_params=None):
         """
@@ -123,18 +132,20 @@ class CollapsedMixture(CollapsedVB):
         Success: (bool)
 
         """
+        phi_hat = self.get_phihat()
         if indexK is None:
-            indexK = np.random.multinomial(1,self.phi_hat/self.num_data).argmax()
+            indexK = np.random.multinomial(1, phi_hat/self.num_data).argmax()
         if indexK > (self.num_clusters-1):
-            return False #index exceed no. clusters
-        elif self.phi_hat[indexK]<1:
-            return False # no data to split
+            return False  # index exceed no. clusters
+        elif phi_hat[indexK] < 1:
+            return False  # no data to split
 
-        #ensure there's something to split
-        if np.sum(self.phi[:,indexK]>threshold) <2:
+        # ensure there's something to split
+        if np.sum(self.phi[:, indexK] > threshold) < 2:
             return False
 
-        if verbose:print("\nattempting to split cluster ", indexK)
+        if verbose:
+            print("\nattempting to split cluster ", indexK)
 
         bound_old = self.bound()
         phi_old = self.get_vb_param()
@@ -142,16 +153,16 @@ class CollapsedMixture(CollapsedVB):
         param_old = self.optimizer_array.copy()
         old_num_clusters = self.num_clusters
 
-        #re-initalize
+        # re-initalize
         self.num_clusters += 1
-        self.phi_ = np.hstack((self.phi_,self.phi_.min(1)[:,None]))
-        indexN = np.nonzero(self.phi[:,indexK] > threshold)[0]
+        self.phi_ = np.hstack((self.phi_, self.phi_.min(1)[:, None]))
+        indexN = np.nonzero(self.phi[:, indexK] > threshold)[0]
 
-        # this procedure equally assigns data to the new and old clusters, 
+        # this procedure equally assigns data to the new and old clusters,
         # aside from one random point, which is in the new cluster
         special = np.random.permutation(indexN)[0]
-        self.phi_[indexN,-1] = self.phi_[indexN,indexK].copy()
-        self.phi_[special,-1] = np.max(self.phi_[special])+10
+        self.phi_[indexN, -1] = self.phi_[indexN, indexK].copy()
+        self.phi_[special, -1] = np.max(self.phi_[special])+10
         self.set_vb_param(self.get_vb_param())
 
         self.optimize(maxiter=maxiter, verbose=verbose)
@@ -164,13 +175,16 @@ class CollapsedMixture(CollapsedVB):
             self.num_clusters = old_num_clusters
             self.set_vb_param(phi_old)
             self.optimizer_array = param_old
-            if verbose:print("split failed, bound changed by: ",bound_increase, '(K=%s)' % self.num_clusters)
+            if verbose:
+                print("split failed, bound changed by: ", bound_increase, '(K=%s)' % self.num_clusters)
 
             return False
 
         else:
-            if verbose:print("split suceeded, bound changed by: ", bound_increase, ',', self.num_clusters-old_num_clusters,' new clusters', '(K=%s)' % self.num_clusters)
-            if verbose:print("optimizing new split to convergence:")
+            if verbose:
+                print("split suceeded, bound changed by: ", bound_increase,
+                      ',', self.num_clusters-old_num_clusters, ' new clusters', '(K=%s)' % self.num_clusters)
+                print("optimizing new split to convergence:")
             if optimize_params:
                 self.optimize(**optimize_params)
             else:
@@ -185,12 +199,13 @@ class CollapsedMixture(CollapsedVB):
         for kk in range(self.num_clusters):
             self.recursive_splits(kk, verbose=verbose)
 
-    def recursive_splits(self,k=0, verbose=True, optimize_params=None):
+    def recursive_splits(self, k=0, verbose=True, optimize_params=None):
         """
-        A recursive function which attempts to split a cluster (indexed by k), and if sucessful attempts to split the resulting clusters
+        A recursive function which attempts to split a cluster
+        (indexed by k), and if sucessful attempts to split the resulting clusters
         """
         success = self.try_split(k, verbose=verbose, optimize_params=optimize_params)
         if success:
-            if not k==(self.num_clusters-1):
+            if not k == (self.num_clusters-1):
                 self.recursive_splits(self.num_clusters-1, verbose=verbose, optimize_params=optimize_params)
             self.recursive_splits(k, verbose=verbose, optimize_params=optimize_params)

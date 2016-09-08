@@ -3,12 +3,13 @@
 
 import numpy as np
 import GPflow
-import time
-import sys #for flushing
-
+import sys  # for flushing
 from numpy.linalg.linalg import LinAlgError
+
+
 class LinAlgWarning(Warning):
     pass
+
 
 class CollapsedVB(GPflow.model.Model):
     """
@@ -23,17 +24,14 @@ class CollapsedVB(GPflow.model.Model):
     providing the optimisation routine.
     """
 
-    def __init__(self, name):
+    def __init__(self):
         """"""
-        GPflow.model.Model.__init__(self, name)
+        GPflow.model.Model.__init__(self)
 
-        self.hyperparam_interval=50
-
+        # settings for optimizing hyper parameters
+        self.hyperparam_interval = 50
         self.default_method = 'HS'
-        self.hyperparam_opt_args = {
-                'max_iters': 20,
-                'messages': 1,
-                'clear_after_finish': True}
+        self.hyperparam_opt_args = dict(maxiter=20, disp=True)
 
     def randomize(self):
         self.set_vb_param(np.random.randn(self.get_vb_param().size))
@@ -42,23 +40,13 @@ class CollapsedVB(GPflow.model.Model):
         """Return a vector of variational parameters"""
         raise NotImplementedError
 
-    def set_vb_param(self,x):
+    def set_vb_param(self, x):
         """Expand a vector of variational parameters into the model"""
         raise NotImplementedError
 
-    def bound(self):
-        """Returns the lower bound on the marginal likelihood"""
+    def vb_bound_grad_natgrad(self):
+        """Returns the bound, gradient and natural gradient of the variational parameters"""
         raise NotImplementedError
-
-    def vb_grad_natgrad(self):
-        """Returns the gradient and natural gradient of the variational parameters"""
-
-    def log_likelihood(self):
-        """
-        In optimising the non variational (e.g. kernel) parameters, use the
-        bound as a proxy for the likelihood
-        """
-        return self.bound()
 
     def optimize(self, method='HS', maxiter=500, ftol=1e-6, gtol=1e-6, step_length=1., callback=None, verbose=True):
         """
@@ -79,10 +67,11 @@ class CollapsedVB(GPflow.model.Model):
 
         """
 
-        assert method in ['FR', 'PR','HS','steepest'], 'invalid conjugate gradient method specified.'
+        assert method in ['FR', 'PR', 'HS', 'steepest'], 'invalid conjugate gradient method specified.'
 
         iteration = 0
-        bound_old = self.bound()
+        bound_old, grad_old, natgrad_old = self.vb_bound_grad_natgrad()
+        squareNorm_old = np.dot(natgrad_old, grad_old)  # used to monitor convergence
         searchDir_old = 0.
         iteration_failed = False
         while True:
@@ -90,55 +79,60 @@ class CollapsedVB(GPflow.model.Model):
             if callback is not None:
                 callback()
 
-            bound,grad,natgrad = self.vb_bound_grad_natgrad()
-            grad,natgrad = -grad,-natgrad
-            squareNorm = np.dot(natgrad,grad) # used to monitor convergence
+            bound, grad, natgrad = self.vb_bound_grad_natgrad()
+            grad, natgrad = -grad, -natgrad
+            squareNorm = np.dot(natgrad, grad)  # used to monitor convergence
 
-            #find search direction
-            if (method=='steepest') or not iteration:
+            # find search direction
+            if (method == 'steepest') or not iteration:
                 beta = 0
-            elif (method=='PR'):
-                beta = tf.matmul((natgrad-natgrad_old),grad)/squareNorm_old
-            elif (method=='FR'):
+            elif (method == 'PR'):
+                beta = np.dot((natgrad-natgrad_old), grad) / squareNorm_old
+            elif (method == 'FR'):
                 beta = squareNorm/squareNorm_old
-            elif (method=='HS'):
-                beta = np.matmul((natgrad-natgrad_old),grad) / np.matmul((natgrad-natgrad_old),grad_old)
+            elif (method == 'HS'):
+                beta = np.dot((natgrad-natgrad_old), grad) / np.dot((natgrad-natgrad_old), grad_old)
             if np.isnan(beta) or (beta < 0.):
                 beta = 0.
-            searchDir = -natgrad + beta*searchDir_old
+            searchDir = -natgrad + beta * searchDir_old
 
             # Try a conjugate step
-            phi_old = self.get_vb_param()
+            x_old = self.get_vb_param()
             try:
-                self.set_vb_param(phi_old + step_length*searchDir)
-                bound = self.bound()
-            except LinAlgError: # WHat is the exception in tensorflow?
-                self.set_vb_param(phi_old)
-                bound = bound_old-1
+                self.set_vb_param(x_old + step_length * searchDir)
+                bound, _, _ = self.vb_bound_grad_natgrad()
+            except LinAlgError:  # WHat is the exception in tensorflow?
+                self.set_vb_param(x_old)
+                bound = bound_old - 1
 
             iteration += 1
 
-            # Make sure there's an increase in the bound, else revert to steepest, which is guaranteed to increase the bound.
+            # Make sure there's an increase in the bound, else revert to steepest,
+            # which is guaranteed to increase the bound.
             # (It's the same as VBEM.)
             if bound < bound_old:
                 searchDir = -natgrad
                 try:
-                    self.set_vb_param(phi_old + step_length*searchDir)
+                    self.set_vb_param(x_old + step_length*searchDir)
                     bound = self.bound()
-                except LinAlgError: # What is the tensorflow exception??
+                except LinAlgError:  # What is the tensorflow exception??
                     import warnings
-                    warnings.warn("Caught LinalgError in setting variational parameters, trying to continue with old parameter settings", LinAlgWarning)
-                    self.set_vb_param(phi_old)
-                    bound = self.bound()
+                    warnings.warn("Caught LinalgError in setting variational parameters,\
+                                  trying to continue with old parameter settings", LinAlgWarning)
+                    self.set_vb_param(x_old)
+                    bound, _, _ = self.vb_bound_grad_natgrad()
                     iteration_failed = False
                 iteration += 1
 
             if verbose:
-                print('\riteration '+str(iteration)+' bound='+str(bound) + ' grad='+str(squareNorm) + ', beta='+str(beta))
+                print('\riteration '+str(iteration) +
+                      ' bound='+str(bound) +
+                      ' grad='+str(squareNorm) +
+                      ', beta='+str(beta))
                 sys.stdout.flush()
 
             # Converged yet? try the parameters if so
-            if tf.abs(bound-bound_old) <= ftol:
+            if np.abs(bound-bound_old) <= ftol:
                 if verbose:
                     print('vb converged (ftol)')
 
@@ -157,29 +151,26 @@ class CollapsedVB(GPflow.model.Model):
                     print('maxiter exceeded')
                 break
 
-            #store essentials of previous iteration
-            natgrad_old = natgrad 
-            grad_old = grad 
+            # store essentials of previous iteration
+            natgrad_old = natgrad
+            grad_old = grad
             searchDir_old = searchDir
             squareNorm_old = squareNorm
 
             # hyper param_optimisation
-            if ((iteration >1) and not (iteration%self.hyperparam_interval)) or iteration_failed:
+            if ((iteration > 1) and not (iteration % self.hyperparam_interval)) or iteration_failed:
                 self.optimize_parameters()
 
             bound_old = bound
-
-
 
     def optimize_parameters(self):
         """
         Optimises the model parameters (non variational parameters)
         Returns the increment in the bound acheived
         """
-        if self.optimizer_array.size>0:
+        if self.get_free_state().size > 0:
             start = self.bound()
-            # Should convert self.phi to a Dataholder here so as to not optimize it?
-            GPflow.Model.model.optimize(self,**self.hyperparam_opt_args)
-            return self.bound() - start
+            GPflow.model.Model.optimize(self, **self.hyperparam_opt_args)
+            return self.compute_log_likelihood() - start
         else:
             return 0.

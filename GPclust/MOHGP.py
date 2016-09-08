@@ -2,9 +2,8 @@
 # Licensed under the GPL v3 (see LICENSE.txt)
 
 import numpy as np
-from collapsed_mixture import CollapsedMixture
+from .collapsed_mixture import CollapsedMixture
 import GPflow
-#from GPy.util.linalg import mdot, pdinv, backsub_both_sides, dpotrs, jitchol, dtrtrs
 import tensorflow as tf
 
 
@@ -19,124 +18,107 @@ class MOHGP(CollapsedMixture):
     Arguments
     =========
     X        - The times of observation of the time series in a (Tx1) np.array
-    Y        - A np.array of the observed time-course values: each row contains a time series, each column represents a unique time point
+    Y        - A np.array of the observed time-course values: each row contains
+               a time series, each column represents a unique time point
     kernF    - A GPflow kernel to model the mean function of each cluster
-    kernY    - A GPflow kernel to model the deviation of each of the time courses from the mean of the cluster
+    kernY    - A GPflow kernel to model the deviation of each of the time courses
+               from the mean of the cluster
     alpha    - The a priori Dirichlet concentrationn parameter (default 1.)
-    prior_Z  - Either 'symmetric' or 'dp', specifies whether to use a symmetric dirichelt prior for the clusters, or a (truncated) Dirichlet Process.
+    prior_Z  - Either 'symmetric' or 'dp', specifies whether to use a symmetric Dirichlet
+               prior for the clusters, or a (truncated) Dirichlet Process.
     name     - A convenient string for printing the model (default MOHGP)
 
     """
-    def __init__(self, X, kernF, kernY, Y, num_clusters=2, alpha=1., prior_Z='symmetric', name='MOHGP'):
+    def __init__(self, X, kernF, kernY, Y, num_clusters=2, alpha=1., prior_Z='symmetric'):
 
         num_data, self.D = Y.shape
-        self.Y = GPflow.param.DataHolder(Y, on_shape_change='pass')
+        self.Y = GPflow.param.DataHolder(Y, on_shape_change='raise')
         self.X = GPflow.param.DataHolder(X, on_shape_change='pass')
-        assert X.shape[0]==self.D, "input data don't match observations"
+        assert X.shape[0] == self.D, "input data don't match observations"
 
-        CollapsedMixture.__init__(self, num_data, num_clusters, prior_Z, alpha, name)
+        CollapsedMixture.__init__(self, num_data, num_clusters, prior_Z, alpha)
 
         self.kernF = kernF
         self.kernY = kernY
         self.LOG2PI = np.log(2.*np.pi)
-        #initialize kernels
-        with self.tf_mode():
-            self.Sf = self.kernF.K(self.X)
-            self.Sy = self.kernY.K(self.X)
 
-        self.Sy_chol = tf.cholesky(self.Sy + GPflow.tf_hacks.eye(self.D)*1e-6)
-        self.Sy_logdet = 2.*tf.reduce_sum(tf.log(tf.diag_part(self.Sy_chol)))
-        self.Sy_inv = tf.matrix_triangular_solve(self.Sy_chol,GPflow.tf_hacks.eye(self.D), lower=True)
+        # Computations that can be done outside the optimisation loop
+        self.YTY = GPflow.param.DataHolder(np.dot(Y.T, Y))
 
-        #Computations that can be done outside the optimisation loop
-        self.YYT = GPflow.param.DataHolder(Y[:,:,np.newaxis]*Y[:,np.newaxis,:])
-        self.YTY = GPflow.param.DataHolder(np.dot(Y.T,Y))
-        self.do_computations()
+    def build_likelihood(self):
+        Sf = self.kernF.K(self.X)
+        Sy = self.kernY.K(self.X)
 
+        Sy_chol = tf.cholesky(Sy + GPflow.tf_hacks.eye(self.D) * 1e-6)
+        Sy_logdet = 2.*tf.reduce_sum(tf.log(tf.diag_part(Sy_chol)))
+        tmp = tf.matrix_triangular_solve(Sy_chol, GPflow.tf_hacks.eye(self.D), lower=True)
+        Sy_inv = tf.matrix_triangular_solve(tf.transpose(Sy_chol), tmp, lower=False)
 
-    def parameters_changed(self):
-        """ Set the kernel parameters. Note that the variational parameters are handled separately."""
-        with self.tf_mode(): 
-            self.Sf = self.kernF.K(self.X)
-            self.Sy = self.kernY.K(self.X)
-
-        self.Sy_chol = tf.cholesky(self.Sy + GPflow.tf_hacks.eye(self.D)*1e-6)
-        self.Sy_logdet = 2.*tf.reduce_sum(tf.log(tf.diag_part(self.Sy_chol)))
-        self.Sy_inv = tf.matrix_triangular_solve(self.Sy_chol,GPflow.tf_hacks.eye(self.D), lower=True)
-
-        #update everything
-        self.do_computations()
-
-
-    def do_computations(self):
-        """
-        Here we do all the computations that are required whenever the kernels
-        or the variational parameters are changed.
-        """
-        #sufficient stats.
-        with self.tf_mode():
-            self.ybark = tf.transpose(tf.matmul(tf.transpose(self.phi),self.Y))
+        phi = tf.nn.softmax(self.logphi)
+        ybark = tf.transpose(tf.matmul(tf.transpose(phi), self.Y))
+        phi_hat = tf.reduce_sum(phi, 0)
 
         # compute posterior variances of each cluster (lambda_inv)
-        tmp1 = tf.matrix_triangular_solve(self.Sy_chol, self.Sf, lower=True)
-        tmp = tf.transpose(tf.matrix_triangular_solve(self.Sy_chol,tf.transpose(tmp1),lower=True))
+        tmp1 = tf.matrix_triangular_solve(Sy_chol, Sf, lower=True)
+        tmp = tf.transpose(tf.matrix_triangular_solve(Sy_chol, tf.transpose(tmp1), lower=True))
 
-        # a num_clustersxDxD series of identity matrices
-        Id = tf.tile(tf.expand_dims(GPflow.tf_hacks.eye(self.D), 0), [self.num_clusters, 1, 1])  
-        self.Cs =  Id * tf.reshape(self.phi_hat, [self.num_clusters, 1, 1])
-        self.C_chols = tf.batch_cholesky(self.Cs)
-    
-        self.log_det_diff_sum = 0. 
+        Cs = tf.expand_dims(GPflow.tf_hacks.eye(self.D), 0) + tf.expand_dims(tmp, 0) * tf.reshape(phi_hat, (-1, 1, 1))
+        C_chols = tf.batch_cholesky(Cs)
+        log_det_diff_sum = 2 * tf.reduce_sum(tf.log(tf.batch_matrix_diag_part(C_chols)))
 
-        # ----- Need to fix below 2 lines
-        #for i in range(self.num_clusters):
-        #    self.log_det_diff_sum += 2.*tf.reduce_sum(tf.log(tf.diag_part(self.C_chols[i])))
+        L_tiled = tf.tile(tf.expand_dims(tf.transpose(Sy_chol), 0), [self.num_clusters, 1, 1])
+        tmp = tf.batch_matrix_triangular_solve(C_chols, L_tiled, lower=True)
+        tmp2 = tf.batch_matmul(tf.batch_matrix_transpose(tmp), tmp)
+        Lambda_inv = (tf.expand_dims(Sy, 0) - tmp2) / tf.reshape(phi_hat, [-1, 1, 1])
 
-        tmp = tf.batch_matrix_triangular_solve(self.C_chols,tf.tile(tf.expand_dims(self.Sy_chol,0),[self.num_clusters,1,1]),lower=True)
-        tmp2 = tf.batch_matmul(tf.batch_matrix_transpose(tmp),tmp)
-        self.Lambda_inv = (tf.tile(tf.expand_dims(self.Sy, 0),[self.num_clusters,1,1]) - tmp2) / tf.reshape(self.phi_hat, [-1, 1, 1]) 
-                
-        # It appears we only need self.muk for the vb_grad_natgrad function.  Since tf will take care of the derivatives, 
-        #do we need this anymore? -- NO
-        #self.muk[i] = tf.mul(self.Lambda_inv,tf.transpose(self.Syi_ybark)[:,:,None]) # ???
+        Li_ybark = tf.matrix_triangular_solve(Sy_chol, ybark, lower=True)
+        Syi_ybark = tf.matrix_triangular_solve(tf.transpose(Sy_chol), Li_ybark, lower=False)
+        Syi_ybarkybarkT_Syi = tf.expand_dims(tf.transpose(Syi_ybark), 1) * tf.expand_dims(tf.transpose(Syi_ybark), 2)
 
-        #posterior mean and other useful quantities
-        self.Syi_ybark = tf.matrix_triangular_solve(self.Sy_chol,self.ybark, lower=True)
-        self.Syi_ybarkybarkT_Syi = tf.mul(tf.expand_dims(tf.transpose(self.Syi_ybark),1),tf.expand_dims(tf.transpose(self.Syi_ybark),2))
+        return -0.5 * (self.num_data * self.D * self.LOG2PI +
+                       log_det_diff_sum + self.num_data * Sy_logdet +
+                       tf.reduce_sum(self.YTY * Sy_inv) -
+                       tf.reduce_sum(Syi_ybarkybarkT_Syi * Lambda_inv))\
+            - self.build_KL_Z()
 
-    def log_likelihood(self):
-        # tensorflow edition of bound()
-        # gets picked up automatically by tensorflow due to naming convention
-        return -0.5 * ( self.num_data * self.D * self.LOG2PI \
-           + self.log_det_diff_sum + self.num_data * self.Sy_logdet \
-           + tf.reduce_sum(tf.mul(self.YTY, self.Sy_inv)) ) \
-           + 0.5 * tf.reduce_sum(tf.mul(self.Syi_ybarkybarkT_Syi,self.Lambda_inv)) \
-           + self.mixing_prop_bound() + self.H
+    @GPflow.param.AutoFlow((tf.float64, [None, None]))
+    def predict_components(self, Xnew):
+        """The predictive density under each component"""
 
-    def bound(self):
-        """
-        Compute the lower bound on the marginal likelihood (conditioned on the
-        GP hyper parameters).
-        """
-        return tf.mul(tf.constant(1.,dtype=tf.float64),self.log_likelihood(),name='bound') # Hack to name it bound
-	
+        Sf = self.kernF.K(self.X)
+        Sf_tiled = tf.tile(tf.expand_dims(Sf, 0), [self.num_clusters, 1, 1])
+        Sy = self.kernY.K(self.X)
 
-    def vb_bound_grad_natgrad(self):
-        """
-        Natural Gradients of the bound with respect to phi, the variational
-        parameters controlling assignment of the data to clusters
-        """
-        with self.tf_mode():
-            bound = self.bound()
-            print bound
-            print self.phi
-            #grad_phi = tf.gradients(bound,self.tfphi)
-            grad_phi = tf.gradients(bound,self.phi)
-            print grad_phi
-            # replicate np.sum(self.phi*grad_phi,1)
-            A = tf.reduce_sum(tf.mul(self.phi,grad_phi),1)
-            natgrad = tf.sub(grad_phi,tf.expand_dims(A,1))
-            #grad = tf.mul(natgrad,self.tfphi) 
-            grad = tf.mul(natgrad,self.phi) 
-            feed_dict = self.get_feed_dict()
-            return self._session.run([bound,grad,natgrad],feed_dict=feed_dict)
+        Sy_chol = tf.cholesky(Sy + GPflow.tf_hacks.eye(self.D) * 1e-6)
+        Sy_chol_inv = tf.matrix_triangular_solve(Sy_chol, GPflow.tf_hacks.eye(self.D), lower=True)
+        Sy_inv = tf.matrix_triangular_solve(tf.transpose(Sy_chol), Sy_chol_inv, lower=False)
+        Sy_chol_inv_tiled = tf.tile(tf.expand_dims(tf.transpose(Sy_chol_inv), 0), [self.num_clusters, 1, 1])
+        Sy_inv_tiled = tf.tile(tf.expand_dims(Sy_inv, 0), [self.num_clusters, 1, 1])
+
+        phi = tf.nn.softmax(self.logphi)
+        ybark = tf.transpose(tf.matmul(tf.transpose(phi), self.Y))
+        phi_hat = tf.reduce_sum(phi, 0)
+
+        tmp1 = tf.matrix_triangular_solve(Sy_chol, Sf, lower=True)
+        tmp = tf.transpose(tf.matrix_triangular_solve(Sy_chol, tf.transpose(tmp1), lower=True))
+
+        Cs = tf.expand_dims(GPflow.tf_hacks.eye(self.D), 0) + tf.expand_dims(tmp, 0) * tf.reshape(phi_hat, (-1, 1, 1))
+        C_chols = tf.batch_cholesky(Cs)
+
+        tmp = tf.batch_matrix_triangular_solve(C_chols, Sy_chol_inv_tiled)
+        B_invs = tf.batch_matmul(tf.batch_matrix_transpose(tmp), tmp) * tf.reshape(phi_hat, [-1, 1, 1])
+
+        kx = self.kernF.K(self.X, Xnew)
+        kx_tiled = tf.tile(tf.expand_dims(kx, 0), [self.num_clusters, 1, 1])
+        kxx = self.kernF.K(Xnew) + self.kernY.K(Xnew)
+
+        tmp = tf.expand_dims(GPflow.tf_hacks.eye(self.D), 0) - tf.batch_matmul(B_invs, Sf_tiled)
+        tmp = tf.batch_matmul(tf.batch_matrix_transpose(kx_tiled), tmp)
+        tmp = tf.batch_matmul(tmp, Sy_inv_tiled)
+        mu = tf.batch_matmul(tmp, tf.expand_dims(tf.transpose(ybark), 2))
+
+        tmp = tf.batch_matmul(B_invs, kx_tiled)
+        tmp = tf.batch_matmul(tf.batch_matrix_transpose(kx_tiled), tmp)
+        var = tf.expand_dims(kxx, 0) - tmp
+
+        return mu, var, ybark

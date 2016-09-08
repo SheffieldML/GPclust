@@ -10,7 +10,7 @@ except ImportError:
     
 from scipy.special import gammaln, digamma
 from scipy import stats
-from collapsed_mixture import CollapsedMixture
+from .collapsed_mixture import CollapsedMixture
 
 class MOG(CollapsedMixture):
     """
