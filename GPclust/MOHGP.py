@@ -117,7 +117,7 @@ class MOHGP(CollapsedMixture):
         # tmp = [dtrtrs(L, self.Sy_chol_inv, lower=1)[0] for L in self._C_chols]
         # B_invs = [phi_hat_i*np.dot(tmp_i.T, tmp_i) for phi_hat_i, tmp_i in zip(self.phi_hat, tmp)]
         tmp = tf.batch_matrix_triangular_solve(C_chols, Sy_chol_inv_tiled, lower=True)
-        B_invs = tf.batch_matmul(tf.batch_matrix_transpose(tmp), tmp) * tf.reshape(phi_hat, [-1, 1, 1])
+        B_invs = tf.batch_matmul(tf.batch_matrix_transpose(tmp), tmp) * tf.reshape(phi_hat, tile_shape)
 
         kx = self.kernF.K(self.X, Xnew)
         kx_tiled = tf.tile(tf.expand_dims(kx, 0), tile_shape)

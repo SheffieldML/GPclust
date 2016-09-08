@@ -97,6 +97,7 @@ class CollapsedMixture(CollapsedVB):
         bound = self.build_likelihood()
         grad, = tf.gradients(bound, self.logphi)
         natgrad = grad / tf.nn.softmax(self.logphi)
+        grad, natgrad = tf.clip_by_value(grad, -100, 100), tf.clip_by_value(natgrad, -100, 100)
         return bound, tf.reshape(grad, [-1]), tf.reshape(natgrad, [-1])
 
     def reorder(self):
@@ -132,6 +133,7 @@ class CollapsedMixture(CollapsedVB):
         Success: (bool)
 
         """
+        phi = self.get_phi()
         phi_hat = self.get_phihat()
         if indexK is None:
             indexK = np.random.multinomial(1, phi_hat/self.num_data).argmax()
@@ -141,29 +143,28 @@ class CollapsedMixture(CollapsedVB):
             return False  # no data to split
 
         # ensure there's something to split
-        if np.sum(self.phi[:, indexK] > threshold) < 2:
+        if np.sum(phi[:, indexK] > threshold) < 2:
             return False
 
         if verbose:
             print("\nattempting to split cluster ", indexK)
 
         bound_old = self.bound()
-        phi_old = self.get_vb_param()
-        self._optimizer_copy_transformed = False  # Redo transform in case parameters have been unlinked
-        param_old = self.optimizer_array.copy()
+        logphi_old = self.logphi.value
+        param_old = self.get_parameter_dict()
         old_num_clusters = self.num_clusters
 
         # re-initalize
         self.num_clusters += 1
-        self.phi_ = np.hstack((self.phi_, self.phi_.min(1)[:, None]))
-        indexN = np.nonzero(self.phi[:, indexK] > threshold)[0]
+        logphi = np.hstack((logphi_old, logphi_old.min(1)[:, None]))
+        indexN = np.nonzero(phi[:, indexK] > threshold)[0]
 
         # this procedure equally assigns data to the new and old clusters,
         # aside from one random point, which is in the new cluster
         special = np.random.permutation(indexN)[0]
-        self.phi_[indexN, -1] = self.phi_[indexN, indexK].copy()
-        self.phi_[special, -1] = np.max(self.phi_[special])+10
-        self.set_vb_param(self.get_vb_param())
+        logphi[indexN, -1] = logphi[indexN, indexK].copy()
+        logphi[special, -1] = np.max(logphi[special])+10
+        self.set_vb_param(logphi)
 
         self.optimize(maxiter=maxiter, verbose=verbose)
         self.remove_empty_clusters()
@@ -173,8 +174,8 @@ class CollapsedMixture(CollapsedVB):
 
         if (bound_increase < 1e-3):
             self.num_clusters = old_num_clusters
-            self.set_vb_param(phi_old)
-            self.optimizer_array = param_old
+            self.set_vb_param(logphi_old)
+            self.set_parameter_dict(param_old)
             if verbose:
                 print("split failed, bound changed by: ", bound_increase, '(K=%s)' % self.num_clusters)
 
