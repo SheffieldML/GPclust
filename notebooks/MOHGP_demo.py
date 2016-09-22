@@ -1,6 +1,5 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import sys
 import GPflow
 from GPclust import MOHGP
 np.random.seed(1)
