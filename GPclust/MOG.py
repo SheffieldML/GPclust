@@ -54,11 +54,15 @@ class MOG(CollapsedMixture):
         phi_hat = tf.reduce_sum(phi, 0)
         self.kNs = phi_hat + self.k0
         self.vNs = phi_hat + self.v0
-        # Need the correct tensorflow equivalent for the following
 
         # ---------------------------------------------------------------------------
-        Xsumk = np.tensordot(self.X,phi,((0),(0))) #D x K
-        Ck = np.tensordot(phi, self.XXT,((0),(0))).T# D x D x K
+        #Xsumk = np.tensordot(self.X,phi,((0),(0))) #D x K
+        # X is N x D and phi is N x K, so Xsumk is X.T*phi
+        Xsumk = tf.matmul(tf.transpose(self.X),phi)
+        #Ck = np.tensordot(phi, self.XXT,((0),(0))).T# D x D x K
+        # reshape XXT which is NxDxD to DxDxN, then Ck is reshapeXXT*phi
+        reshapeXXT = tf.reshape(tf.transpose(tf.reshape(self.XXT,tf.pack([self.num_data,self.D*self.D]))),tf.pack([self.D,self.D,self.num_data]))
+        Ck = tf.matmul(reshapeXXT,phi)
         # ---------------------------------------------------------------------------
 
         self.mun = tf.div((self.k0*tf.expand_dims(self.m0,1) + Xsumk),tf.expand_dims(self.kNs,0)) # D x K

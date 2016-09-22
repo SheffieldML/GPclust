@@ -16,18 +16,20 @@ def tf_multiple_pdinv(A):
     """
     A = tf.convert_to_tensor(A)
     D1, D, N = A.get_shape()
-    chols = tf.batch_cholesky(tf.reshape(tf.transpose(tf.reshape(A,tf.pack([D*D,N])) +\
-        tf.reshape(1e-6*GPflow.tf_hacks.eye(D),tf.pack([D*D,1]))),tf.pack([N,D,D])))
-    print chols.get_shape()
-    print GPflow.tf_hacks.eye(D).get_shape()
-    invs = chols
-    #invs = tf.batch_matrix_triangular_solve(chols, tf.expand_dims(GPflow.tf_hacks.eye(D),0), lower=True)
-    halflogdets = tf.reduce_sum(tf.log(tf.batch_matrix_diag_part(chols)),1)
+    # Reshape A so tensorflow can deal with it
+    A = tf.reshape(tf.transpose(tf.reshape(A,tf.pack([D*D,N]))),tf.pack([N,D,D]))
+
+    chols = tf.batch_cholesky(A + tf.expand_dims(GPflow.tf_hacks.eye(D), 0) * 1e-6)
+    #RHS = N copies of eye(D), so it is [N,D,D]
+    invs = tf.batch_cholesky_solve(chols,RHS)
+    hld = 0.5*tf.log(tf.batch_matrix_determinant(A))
+    invs = tf.reshape(tf.transpose(tf.reshape(invs,tf.pack([N,D*D]))),tf.pack([D,D,N]))
+    #halflogdets = tf.reduce_sum(tf.log(tf.batch_matrix_diag_part(chols)),1)
     #invs = [GPy.util.linalg.dpotri(L,True)[0] for L in chols]
     #invs = [np.triu(I)+np.triu(I,1).T for I in invs]
     #invs = tf.batch_matrix_band_part(invs,0,-1) +\
     #    tf.batch_matrix_transpose(tf.batch_matrix_band_part(invs,0,-1)-tf.batch_matrix_band_part(invs,0,0))
-    return invs, halflogdets
+    return invs, hld
 
 def multiple_pdinv(A):
     N = A.shape[-1]
@@ -53,16 +55,23 @@ def ln_dirichlet_C(a):
     return tf.lgamma(tf.reduce_sum(a)) - tf.reduce_sum(tf.lgamma(a))
 
 if __name__ == '__main__':
-    A = np.random.rand(3,3,4)
-    A = (A.reshape(3*3,4) + np.eye(3).reshape(3*3,1)).reshape(3,3,4)
+    D = 3; N = 1
+    A = np.random.rand(D,D,N)
+    #A = np.asarray([[2.,-1.,0.],[-1.,2.,-1.],[0.,-1.,2.]])[:,:,None]
+    A = (A.reshape(D*D,N) + np.eye(D).reshape(D*D,1)).reshape(D,D,N)
+    #print A
     invs, halflogdets = multiple_pdinv(A)
-    #print invs
-    print 'halflogdets = ',halflogdets
+    #invs = (invs.reshape(D*D,N).T).reshape(N,D,D)
+    print invs
     tfinvs, tfhalflogdets = tf_multiple_pdinv(A)
     with tf.Session() as sess:
         res = sess.run([tfinvs,tfhalflogdets])
-        print np.all(np.isclose(res[1],halflogdets))
-
+        print res[1], halflogdets
+        print np.allclose(res[1],halflogdets,rtol=1e-4)
+        print res[0]
+        #print invs
+        #print np.allclose(res[0],invs,rtol=1e-4)
+ 
     '''
     # lngammad
     v = 5.1
