@@ -20,8 +20,8 @@ def tf_multiple_pdinv(A):
         tf.reshape(1e-6*GPflow.tf_hacks.eye(D),tf.pack([D*D,1]))),tf.pack([N,D,D])))
     print chols.get_shape()
     print GPflow.tf_hacks.eye(D).get_shape()
-
-    invs = tf.batch_matrix_triangular_solve(chols, tf.expand_dims(GPflow.tf_hacks.eye(D),0), lower=True)
+    invs = chols
+    #invs = tf.batch_matrix_triangular_solve(chols, tf.expand_dims(GPflow.tf_hacks.eye(D),0), lower=True)
     halflogdets = tf.reduce_sum(tf.log(tf.batch_matrix_diag_part(chols)),1)
     #invs = [GPy.util.linalg.dpotri(L,True)[0] for L in chols]
     #invs = [np.triu(I)+np.triu(I,1).T for I in invs]
@@ -61,7 +61,7 @@ if __name__ == '__main__':
     tfinvs, tfhalflogdets = tf_multiple_pdinv(A)
     with tf.Session() as sess:
         res = sess.run([tfinvs,tfhalflogdets])
-        print res[1]
+        print np.all(np.isclose(res[1],halflogdets))
 
     '''
     # lngammad
