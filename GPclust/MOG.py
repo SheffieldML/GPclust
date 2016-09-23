@@ -3,12 +3,10 @@
 
 import numpy as np
 import GPflow
+import tensorflow as tf
 from .collapsed_mixture import CollapsedMixture
 
-try:
-    from utilities import multiple_pdinv, lngammad
-except ImportError:
-    from np_utilities import multiple_pdinv, lngammad
+from tf_utilities import tf_multiple_pdinv, lngammad, tensor_lngammad
     
 class MOG(CollapsedMixture):
     """
@@ -38,31 +36,31 @@ class MOG(CollapsedMixture):
         self.m0 = X.mean(0) if prior_m is None else prior_m
         self.k0 = prior_kappa
         self.S0 = GPflow.tf_hacks.eye(self.D)*1.e-3 if prior_S is None else prior_S
-        self.v0 = prior_v or self.D + 1.
+        self.v0 = prior_v or tf.to_double(self.D + 1.)
 
         #precomputed stuff
         self.k0m0m0T = GPflow.param.DataHolder(self.k0*self.m0[:,np.newaxis]*self.m0[np.newaxis,:])
-        self.XXT = GPflow.param.DataHolder(self.X[:,:,np.newaxis]*self.X[:,np.newaxis,:])
+        XXT = X[:,:,np.newaxis]*X[:,np.newaxis,:]
+        self.reshapeXXT = GPflow.param.DataHolder(np.reshape(XXT,(self.num_data,self.D*self.D)).T)
         self.S0_halflogdet = tf.reduce_sum(tf.log(tf.sqrt(tf.diag(tf.cholesky(self.S0)))))
   
         CollapsedMixture.__init__(self, self.num_data, num_clusters, prior_Z, alpha)
-
 
     def build_likelihood(self):
         """Compute the lower bound on the model evidence.  """
         phi = tf.nn.softmax(self.logphi)
         phi_hat = tf.reduce_sum(phi, 0)
-        self.kNs = phi_hat + self.k0
-        self.vNs = phi_hat + self.v0
+
+        self.kNs = tf.add(phi_hat,self.k0)
+        self.vNs = tf.add(phi_hat,self.v0)
 
         # ---------------------------------------------------------------------------
-        #Xsumk = np.tensordot(self.X,phi,((0),(0))) #D x K
-        # X is N x D and phi is N x K, so Xsumk is X.T*phi
+        #Xsumk = np.tensordot(self.X,phi,((0),(0))) #D x num_clusters
+        # X is num_data x D and phi is num_data x num_clusters, so Xsumk is X.T*phi
         Xsumk = tf.matmul(tf.transpose(self.X),phi)
-        #Ck = np.tensordot(phi, self.XXT,((0),(0))).T# D x D x K
-        # reshape XXT which is NxDxD to DxDxN, then Ck is reshapeXXT*phi
-        reshapeXXT = tf.reshape(tf.transpose(tf.reshape(self.XXT,tf.pack([self.num_data,self.D*self.D]))),tf.pack([self.D,self.D,self.num_data]))
-        Ck = tf.matmul(reshapeXXT,phi)
+        #Ck = np.tensordot(phi, self.XXT,((0),(0))).T# D x D x num_clusters
+        # Ck is reshapeXXT*phi
+        Ck = tf.reshape(tf.matmul(self.reshapeXXT,phi),tf.pack([self.D,self.D,self.num_clusters]))
         # ---------------------------------------------------------------------------
 
         self.mun = tf.div((self.k0*tf.expand_dims(self.m0,1) + Xsumk),tf.expand_dims(self.kNs,0)) # D x K
@@ -70,28 +68,47 @@ class MOG(CollapsedMixture):
         Sns = tf.expand_dims(self.S0,2) + Ck + tf.expand_dims(self.k0m0m0T,2) -\
             tf.mul(tf.expand_dims(tf.expand_dims(self.kNs,0),0),munmunT)
 
-
-        # Need to rewrite multiple_pdinv
-        self.Sns_inv , self.Sns_halflogdet = multiple_pdinv(Sns)
+        self.Sns_inv , self.Sns_halflogdet = tf_multiple_pdinv(Sns)
+        print self.Sns_inv.get_shape(), self.Sns_halflogdet.get_shape(), phi.get_shape(), self.vNs.get_shape()
 
         return -0.5*self.D*tf.reduce_sum(tf.log(tf.div(self.kNs,self.k0)))\
-            +self.num_clusters*self.v0*self.S0_halflogdet - tf.reduce_sum(self.vNs*Sns_halflogdet)\
-            +tf.reduce_sum(lngammad(self.vNs, self.D)) - self.num_clusters*lngammad(self.v0, self.D)\
-            +self.build_KL_Z()\
-            -0.5*self.num_data*self.D*self.LOGPI
+            +self.num_clusters*self.v0*self.S0_halflogdet - tf.reduce_sum(tf.mul(self.vNs,self.Sns_halflogdet))\
+            +tf.reduce_sum(tensor_lngammad(self.vNs, self.D)) - self.num_clusters*lngammad(self.v0, self.D)\
+            +self.build_KL_Z() - 0.5*self.num_data*self.D*self.LOGPI
 
 
-    @GPflow.param.AutoFlow((tf.float64, [None, None]))
     def predict_components(self, Xnew):
-        """The predictive density under each component at Xnew"""
-        Dist = tf.sub(tf.expand_dims(Xnew,2),tf.expand_dims(self.mun,0)) # Nnew x D x K
-        tmp = tf.reduce_sum(tf.mul(tf.expand_dim(Dist,2),tf.expand_dims(self.Sns_inv,0)),1)
+        """
+        The predictive density under each component at Xnew
+        """
+        phi = tf.nn.softmax(self.logphi)
+        phi_hat = tf.reduce_sum(phi, 0)
+
+        self.kNs = tf.add(phi_hat,self.k0)
+        self.vNs = tf.add(phi_hat,self.v0)
+
+        Xsumk = tf.matmul(tf.transpose(self.X),phi) # D x num_clusters
+        Ck = tf.reshape(tf.matmul(self.reshapeXXT,phi),tf.pack([self.D,self.D,self.num_clusters]))
+
+        self.mun = tf.div((self.k0*tf.expand_dims(self.m0,1) + Xsumk),tf.expand_dims(self.kNs,0)) # D x num _clusters
+        munmunT = tf.mul(tf.expand_dims(self.mun,1),tf.expand_dims(self.mun,0))
+        Sns = tf.expand_dims(self.S0,2) + Ck + tf.expand_dims(self.k0m0m0T,2) -\
+            tf.mul(tf.expand_dims(tf.expand_dims(self.kNs,0),0),munmunT)
+
+        self.Sns_inv , self.Sns_halflogdet = tf_multiple_pdinv(Sns)
+
+        Dist = tf.sub(tf.expand_dims(Xnew,2),tf.expand_dims(self.mun,0)) # Nnew x D x num_clusters
+        # Tensorflow does not support the following broadcast (Nnew,D,1,num_cluster) * (1,D,D,num_clusters)
+        #tmp = tf.reduce_sum(tf.mul(tf.expand_dims(Dist,2),tf.expand_dims(self.Sns_inv,0)),1)
+        # So we will tile self.Sns_inv Nnew times to do the multiplication
+        h = tf.tile(tf.expand_dims(self.Sns_inv,0),tf.pack([tf.get_shape(Dist)[0],1,1,1]))
+        tmp = tf.reduce_sum(tf.mul(tf.expand_dims(Dist,2),h),1)
         mahalanobis = tf.reduce_sum(tf.mul(tmp,Dist), 1)/(self.kNs+1.)*self.kNs*(self.vNs-self.D+1.)
-        halflndetSigma = self.Sns_halflogdet + 0.5*self.D*np.log((self.kNs+1.)/(self.kNs*(self.vNs-self.D+1.)))
+        halflndetSigma = self.Sns_halflogdet + 0.5*self.D*tf.log((self.kNs+1.)/(self.kNs*(self.vNs-self.D+1.)))
 
         Z  = tf.lgamma(0.5*(tf.expand_dims(self.vNs,0)+1.))-tf.lgamma(0.5*(tf.expand_dims(self.vNs,0)-self.D+1.))\
             -(0.5*self.D)*(tf.log(tf.expand_dims(self.vNs,0)-self.D+1.) + self.LOGPI)\
-            - halflndetSigma \
+            - halflndetSigma#\
             - (0.5*(tf.expand_dims(self.vNs,0)+1.))*tf.log(1.+mahalanobis/(tf.expand_dims(self.vNs,0)-self.D+1.))
 
         return tf.exp(Z)
@@ -106,4 +123,3 @@ class MOG(CollapsedMixture):
         pie = tf.add(phi_hat,self.alpha)
         pie = tf.div(pie,tf.reduce_sum(pie))
         return tf.reduce_sum(tf.mul(Z,tf.expand_dims(pie,0)),1)
-
