@@ -14,8 +14,9 @@ def tf_multiple_pdinv(A):
     hld: 0.5* the log of the determinants of A
     """
     A = tf.convert_to_tensor(A)
-    D1, D, N = A.get_shape()
-    assert D1==D
+    s = tf.shape(A)
+    D = s[0]
+    N = s[2]
     # Reshape A so tensorflow can deal with it
     A = tf.reshape(tf.transpose(tf.reshape(A,tf.pack([D*D,N]))),tf.pack([N,D,D]))
 
@@ -35,7 +36,7 @@ def lngammad(v, D):
 
 def tensor_lngammad(v, D):
     v = tf.convert_to_tensor(v)
-    N = v.get_shape()[0]
+    N = tf.shape(v)[0]
 
     w = tf.linspace(tf.to_double(1.), tf.cast(D, tf.float64),D)
     z = tf.tile(tf.expand_dims(w,1),tf.pack([1,N]))
@@ -54,7 +55,7 @@ def ln_dirichlet_C(a):
     return tf.lgamma(tf.reduce_sum(a)) - tf.reduce_sum(tf.lgamma(a))
 
 if __name__ == '__main__':
-    '''from utilities import multiple_pdinv
+    from utilities import multiple_pdinv
 
     D = 3; N = 2
     A = np.random.rand(D,D,N)
@@ -65,7 +66,6 @@ if __name__ == '__main__':
         res = sess.run([tfinvs,tfhalflogdets])
         assert np.allclose(res[1],halflogdets,rtol=1e-4)
         assert np.allclose(res[0],invs,rtol=1e-4)
-    '''
     # lngammad
     v = 5.1
     D = 5

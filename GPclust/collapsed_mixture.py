@@ -55,21 +55,21 @@ class CollapsedMixture(CollapsedVB):
         """
         phi = tf.nn.softmax(self.logphi)
         phi_hat = tf.reduce_sum(phi, 0)
-        entropy = -tf.reduce_sum(phi * tf.nn.log_softmax(self.logphi))
+        entropy = -tf.reduce_sum(tf.mul(phi,tf.nn.log_softmax(self.logphi)))
         if self.prior_Z == 'symmetric':
             return -ln_dirichlet_C(np.ones(self.num_clusters) * self.alpha)\
                 + ln_dirichlet_C(self.alpha + phi_hat)\
                 - entropy
         elif self.prior_Z == 'DP':
-            phi_tilde_plus_hat = tf.cumsum(tf.reverse(phi_hat), reverse=True)
+            phi_tilde_plus_hat = tf.cumsum(tf.reverse(phi_hat,[True]), reverse=True)
             phi_tilde = phi_tilde_plus_hat - phi_hat
             A = tf.lgamma(1. + phi_hat)
             B = tf.lgamma(self.alpha + phi_tilde)
-            C = tf.gamma(self.alpha + 1. + phi_tilde_plus_hat)
-            D = self.num_clusters*(tf.lgamma(1. + self.alpha) - tf.lgamma(self.alpha))
+            C = tf.lgamma(self.alpha + 1. + phi_tilde_plus_hat)
+            D = self.num_clusters*tf.sub(tf.lgamma(1. + self.alpha),tf.lgamma(self.alpha))
             return -tf.reduce_sum(A)\
                 - tf.reduce_sum(B)\
-                + tf.reduce_sum(C) - D\
+                + tf.reduce_sum(C) - tf.to_double(D)\
                 - entropy
         else:
             raise NotImplementedError("invalid mixing proportion prior type: %s" % self.prior_Z)
