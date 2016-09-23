@@ -42,7 +42,7 @@ class MOG(CollapsedMixture):
         self.k0m0m0T = GPflow.param.DataHolder(self.k0*self.m0[:,np.newaxis]*self.m0[np.newaxis,:])
         XXT = X[:,:,np.newaxis]*X[:,np.newaxis,:]
         self.reshapeXXT = GPflow.param.DataHolder(np.reshape(XXT,(self.num_data,self.D*self.D)).T)
-        self.S0_halflogdet = tf.reduce_sum(tf.log(tf.sqrt(tf.diag(tf.cholesky(self.S0)))))
+        self.S0_halflogdet = tf.reduce_sum(tf.log(tf.sqrt(tf.diag_part(tf.cholesky(self.S0)))))
   
         CollapsedMixture.__init__(self, self.num_data, num_clusters, prior_Z, alpha)
 
@@ -51,8 +51,8 @@ class MOG(CollapsedMixture):
         phi = tf.nn.softmax(self.logphi)
         phi_hat = tf.reduce_sum(phi, 0)
 
-        self.kNs = tf.add(phi_hat,self.k0)
-        self.vNs = tf.add(phi_hat,self.v0)
+        kNs = tf.add(phi_hat,self.k0)
+        vNs = tf.add(phi_hat,self.v0)
 
         # ---------------------------------------------------------------------------
         #Xsumk = np.tensordot(self.X,phi,((0),(0))) #D x num_clusters
@@ -63,16 +63,16 @@ class MOG(CollapsedMixture):
         Ck = tf.reshape(tf.matmul(self.reshapeXXT,phi),tf.pack([self.D,self.D,self.num_clusters]))
         # ---------------------------------------------------------------------------
 
-        self.mun = tf.div((self.k0*tf.expand_dims(self.m0,1) + Xsumk),tf.expand_dims(self.kNs,0)) # D x K
-        munmunT = tf.mul(tf.expand_dims(self.mun,1),tf.expand_dims(self.mun,0))
-        self.Sns = tf.expand_dims(self.S0,2) + Ck + tf.expand_dims(self.k0m0m0T,2) -\
-            tf.mul(tf.expand_dims(tf.expand_dims(self.kNs,0),0),munmunT)
+        mun = tf.div((self.k0*tf.expand_dims(self.m0,1) + Xsumk),tf.expand_dims(kNs,0)) # D x K
+        munmunT = tf.mul(tf.expand_dims(mun,1),tf.expand_dims(mun,0))
+        Sns = tf.expand_dims(self.S0,2) + Ck + tf.expand_dims(self.k0m0m0T,2) -\
+            tf.mul(tf.expand_dims(tf.expand_dims(kNs,0),0),munmunT)
 
-        self.Sns_inv , self.Sns_halflogdet = tf_multiple_pdinv(self.Sns)
-
-        return -0.5*self.D*tf.reduce_sum(tf.log(tf.div(self.kNs,self.k0)))\
-            +self.num_clusters*self.v0*self.S0_halflogdet - tf.reduce_sum(tf.mul(self.vNs,self.Sns_halflogdet))\
-            +tf.reduce_sum(tensor_lngammad(self.vNs, self.D)) - self.num_clusters*lngammad(self.v0, self.D)\
+        Sns_inv, Sns_halflogdet = tf_multiple_pdinv(Sns)
+      
+        return -0.5*self.D*tf.reduce_sum(tf.log(tf.div(kNs,self.k0)))\
+            +self.num_clusters*self.v0*self.S0_halflogdet-tf.reduce_sum(tf.mul(vNs,Sns_halflogdet))\
+            +tf.reduce_sum(tensor_lngammad(vNs, self.D)) - self.num_clusters*lngammad(self.v0, self.D)\
             +self.build_KL_Z() - 0.5*self.num_data*self.D*self.LOGPI
 
     def predict_components_tf(self, Xnew):
@@ -82,32 +82,32 @@ class MOG(CollapsedMixture):
         phi = tf.nn.softmax(self.logphi)
         phi_hat = tf.reduce_sum(phi, 0)
 
-        self.kNs = tf.add(phi_hat,self.k0)
-        self.vNs = tf.add(phi_hat,self.v0)
+        kNs = tf.add(phi_hat,self.k0)
+        vNs = tf.add(phi_hat,self.v0)
 
         Xsumk = tf.matmul(tf.transpose(self.X),phi) # D x num_clusters
         Ck = tf.reshape(tf.matmul(self.reshapeXXT,phi),tf.pack([self.D,self.D,self.num_clusters]))
 
-        self.mun = tf.div((self.k0*tf.expand_dims(self.m0,1) + Xsumk),tf.expand_dims(self.kNs,0)) # D x num _clusters
-        munmunT = tf.mul(tf.expand_dims(self.mun,1),tf.expand_dims(self.mun,0))
-        self.Sns = tf.expand_dims(self.S0,2) + Ck + tf.expand_dims(self.k0m0m0T,2) -\
-            tf.mul(tf.expand_dims(tf.expand_dims(self.kNs,0),0),munmunT)
+        mun = tf.div((self.k0*tf.expand_dims(self.m0,1) + Xsumk),tf.expand_dims(kNs,0)) # D x num_clusters
+        munmunT = tf.mul(tf.expand_dims(mun,1),tf.expand_dims(mun,0))
+        Sns = tf.expand_dims(self.S0,2) + Ck + tf.expand_dims(self.k0m0m0T,2) -\
+            tf.mul(tf.expand_dims(tf.expand_dims(kNs,0),0),munmunT)
 
-        self.Sns_inv , self.Sns_halflogdet = tf_multiple_pdinv(self.Sns)
+        Sns_inv, Sns_halflogdet = tf_multiple_pdinv(Sns)
 
-        Dist = tf.sub(tf.expand_dims(Xnew,2),tf.expand_dims(self.mun,0)) # Nnew x D x num_clusters
+        Dist = tf.sub(tf.expand_dims(Xnew,2),tf.expand_dims(mun,0)) # Nnew x D x num_clusters
         # Tensorflow does not support the following broadcast (Nnew,D,1,num_cluster) * (1,D,D,num_clusters)
         #tmp = tf.reduce_sum(tf.mul(tf.expand_dims(Dist,2),tf.expand_dims(self.Sns_inv,0)),1)
         # So we will tile self.Sns_inv Nnew times to do the multiplication
-        h = tf.tile(tf.expand_dims(self.Sns_inv,0),tf.pack([tf.shape(Dist)[0],1,1,1]))
+        h = tf.tile(tf.expand_dims(Sns_inv,0),tf.pack([tf.shape(Dist)[0],1,1,1]))
         tmp = tf.reduce_sum(tf.mul(tf.expand_dims(Dist,2),h),1)
-        mahalanobis = tf.reduce_sum(tf.mul(tmp,Dist), 1)/(self.kNs+1.)*self.kNs*(self.vNs-self.D+1.)
-        halflndetSigma = self.Sns_halflogdet + 0.5*self.D*tf.log((self.kNs+1.)/(self.kNs*(self.vNs-self.D+1.)))
+        mahalanobis = tf.reduce_sum(tf.mul(tmp,Dist), 1)/(kNs+1.)*kNs*(vNs-self.D+1.)
+        halflndetSigma = Sns_halflogdet + 0.5*self.D*tf.log((kNs+1.)/(kNs*(vNs-self.D+1.)))
 
-        Z  = tf.lgamma(0.5*(tf.expand_dims(self.vNs,0)+1.))-tf.lgamma(0.5*(tf.expand_dims(self.vNs,0)-self.D+1.))\
-            -(0.5*self.D)*(tf.log(tf.expand_dims(self.vNs,0)-self.D+1.) + self.LOGPI)\
+        Z  = tf.lgamma(0.5*(tf.expand_dims(vNs,0)+1.))-tf.lgamma(0.5*(tf.expand_dims(vNs,0)-self.D+1.))\
+            -(0.5*self.D)*(tf.log(tf.expand_dims(vNs,0)-self.D+1.) + self.LOGPI)\
             - halflndetSigma\
-            - (0.5*(tf.expand_dims(self.vNs,0)+1.))*tf.log(1.+mahalanobis/(tf.expand_dims(self.vNs,0)-self.D+1.))
+            - (0.5*(tf.expand_dims(vNs,0)+1.))*tf.log(1.+mahalanobis/(tf.expand_dims(vNs,0)-self.D+1.))
 
         return tf.exp(Z)
 
