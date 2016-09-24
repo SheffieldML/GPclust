@@ -38,7 +38,7 @@ class MOG(CollapsedMixture):
         # store the prior cluster parameters
         self.m0 = X.mean(0) if prior_m is None else prior_m
         self.k0 = prior_kappa
-        self.S0 = GPflow.tf_hacks.eye(self.D)*1.e-3 if prior_S is None else prior_S
+        self.S0 = GPflow.tf_wraps.eye(self.D)*1.e-3 if prior_S is None else prior_S
         self.v0 = prior_v or tf.to_double(self.D + 1.)
 
         # precomputed stuff
