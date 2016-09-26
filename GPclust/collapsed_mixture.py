@@ -61,15 +61,17 @@ class CollapsedMixture(CollapsedVB):
                 + ln_dirichlet_C(self.alpha + phi_hat)\
                 - entropy
         elif self.prior_Z == 'DP':
+            alpha = tf.to_double(self.alpha)
             phi_tilde_plus_hat = tf.cumsum(tf.reverse(phi_hat,[True]), reverse=True)
             phi_tilde = phi_tilde_plus_hat - phi_hat
             A = tf.lgamma(1. + phi_hat)
-            B = tf.lgamma(self.alpha + phi_tilde)
-            C = tf.lgamma(self.alpha + 1. + phi_tilde_plus_hat)
-            D = self.num_clusters*tf.sub(tf.lgamma(1. + self.alpha),tf.lgamma(self.alpha))
+            B = tf.lgamma(alpha + phi_tilde)
+            C = tf.lgamma(alpha + 1. + phi_tilde_plus_hat)
+            D = tf.to_double(self.num_clusters)*tf.sub(tf.lgamma(1. + alpha),tf.lgamma(alpha))
             return -tf.reduce_sum(A)\
                 - tf.reduce_sum(B)\
-                + tf.reduce_sum(C) - tf.to_double(D)\
+                + tf.reduce_sum(C)\
+                - D\
                 - entropy
         else:
             raise NotImplementedError("invalid mixing proportion prior type: %s" % self.prior_Z)

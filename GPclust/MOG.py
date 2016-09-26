@@ -44,7 +44,6 @@ class MOG(CollapsedMixture):
         # precomputed stuff
         self.k0m0m0T = GPflow.param.DataHolder(self.k0*self.m0[:, np.newaxis]*self.m0[np.newaxis, :])
         XXT = X[:, :, np.newaxis]*X[:, np.newaxis, :]
-        self.reshapeXXT = GPflow.param.DataHolder(np.reshape(XXT, (self.num_data, self.D*self.D)).T)
         self.XXT = XXT
         self.S0_halflogdet = tf.reduce_sum(tf.log(tf.sqrt(tf.diag_part(tf.cholesky(self.S0)))))
 
