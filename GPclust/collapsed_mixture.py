@@ -62,7 +62,10 @@ class CollapsedMixture(CollapsedVB):
                 - entropy
         elif self.prior_Z == 'DP':
             alpha = tf.to_double(self.alpha)
-            phi_tilde_plus_hat = tf.cumsum(tf.reverse(phi_hat,[True]), reverse=True)
+            # The following does NOT return the correct value.  I filed an issue on tf github 
+            # (Sept 26, 2016)
+            #phi_tilde_plus_hat = tf.cumsum(tf.reverse(phi_hat,[True]), reverse=True)
+            phi_tilde_plus_hat = tf.reverse(tf.cumsum(tf.reverse(phi_hat,[True])), [True])
             phi_tilde = phi_tilde_plus_hat - phi_hat
             A = tf.lgamma(1. + phi_hat)
             B = tf.lgamma(alpha + phi_tilde)
