@@ -137,3 +137,21 @@ class MOG(CollapsedMixture):
         pie = tf.add(phi_hat, self.alpha)
         pie = tf.div(pie, tf.reduce_sum(pie))
         return tf.reduce_sum(tf.mul(Z, tf.expand_dims(pie, 0)), 1)
+
+    #@GPflow.param.AutoFlow((tf.float64), (tf.float64))
+    @GPflow.param.AutoFlow()
+    def get_means_and_covariances(self):
+        # Generate the shared elements both build_likelihood and predict_components_tf need.
+        # Note, only Sns_chol is returned since predict_components_tf need the inverses
+        phi = tf.nn.softmax(self.logphi)
+        phi_hat = tf.reduce_sum(phi, 0)
+
+        # computations needed for bound, gradient and predictions
+        kNs = phi_hat + self.k0
+        Xsumk = tf.matmul(tf.transpose(phi), self.X)  # K x D
+        Ck = tf.reduce_sum(tf.expand_dims(tf.expand_dims(tf.transpose(phi), 2), 2)
+                           * tf.expand_dims(self.XXT, 0), 1)  # K x D x D
+        mun = (self.k0 * tf.reshape(self.m0, [1, -1]) + Xsumk) / tf.reshape(kNs, [-1, 1])  # K x D
+        munmunT = tf.expand_dims(mun, 1) * tf.expand_dims(mun, 2)  # K x D x D
+        Sns = tf.expand_dims(self.S0 + self.k0m0m0T, 0) + Ck - tf.reshape(kNs, [-1, 1, 1]) * munmunT
+        return mun, Sns
