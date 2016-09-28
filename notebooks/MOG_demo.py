@@ -2,8 +2,8 @@
 # Licensed under the GPL v3 (see LICENSE.txt)
 
 import numpy as np
-import matplotlib.pyplot as plt
 from GPclust import MOG
+from plotter import plot
 
 np.random.seed(0)
 
@@ -35,8 +35,7 @@ for method in ['steepest', 'PR', 'FR', 'HS']:
         m.set_vb_param(st)
         m.optimize(method=method, maxiter=1e4)
 
-m.plot()
-plt.show()
+plot(m,X)
 
 
 

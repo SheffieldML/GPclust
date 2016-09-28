@@ -1,7 +1,7 @@
 import numpy as np
-import matplotlib.pyplot as plt
 import GPflow
 from GPclust import MOHGP
+from plotter import plot
 np.random.seed(1)
 
 #cool structed GP demo
@@ -21,26 +21,20 @@ Ky = GPflow.kernels.RBF(1,0.3,1) +  GPflow.kernels.White(1,0.001)
 Y = means + np.random.multivariate_normal(np.zeros(Nx),Ky.compute_K(X,X),means.shape[0])
 #construct model
 m = MOHGP(X, Kf, Ky, Y, num_clusters=Nclust)
-#m.constrain_positive('')
 
-print m.vb_bound_grad_natgrad()
-
-#m.optimize()
-#m.preferred_optimizer='bfgs'
+m.optimize()
+m.preferred_optimizer='bfgs'
 #m.systematic_splits()
 #m.remove_empty_clusters(1e-3)
-#m.plot(1,1,1,0,0,1)
-#plt.show()
-#raw_input('press enter to continue ...')
+plot(m,X)
+raw_input('press enter to continue ...')
 
 #and again without structure
-'''Y -= Y.mean(1)[:,None]
+Y -= Y.mean(1)[:,None]
 Y /= Y.std(1)[:,None]
 m2 = MOHGP(X, Kf, GPy.kern.White(1), Y, K=Nclust)
-m2.constrain_positive('')
-m2.preferred_optimizer='bfgs'
+#m2.preferred_optimizer='bfgs'
 m2.optimize()
 m2.systematic_splits()
-m2.remove_empty_clusters(1e-3)
-m2.plot(1,1,1,0,0,1)
-'''
+#m2.remove_empty_clusters(1e-3)
+plot(m2,X)
