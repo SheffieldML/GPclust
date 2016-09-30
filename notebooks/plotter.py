@@ -1,6 +1,53 @@
 import numpy as np
 from matplotlib import pyplot as plt
+from matplotlib import cm
 from scipy import stats
+
+def OMGPplot(model, X, Y, gp_num=0):
+        """
+        Plot the mixture of Gaussian Processes.
+        Supports plotting 1d and 2d regression.
+        """
+        XX = np.linspace(X.min(), X.max())[:, None]
+        phi = model.get_phi()
+        if Y.shape[1] == 1:
+            plt.scatter(X, Y, c=phi[:, gp_num], cmap=cm.RdBu, vmin=0.,vmax=1.,lw=0.5)
+            plt.colorbar(label='GP {} assignment probability'.format(gp_num))
+
+            colors = cm.rainbow(np.linspace(0, 1, phi.shape[1]))
+            for i in range(phi.shape[1]):
+                YY_mu, YY_var = model.predict(XX, i)
+                col = colors[i]
+                plt.fill_between(XX[:, 0],
+                                 YY_mu[:, 0] - 2 * np.sqrt(YY_var[:, 0]),
+                                 YY_mu[:, 0] + 2 * np.sqrt(YY_var[:, 0]),
+                                 alpha=0.1,
+                                 facecolor=col)
+                plt.plot(XX, YY_mu[:, 0], c=col, lw=2);
+
+        elif self.Y.shape[1] == 2:
+            plt.scatter(Y[:, 0], Y[:, 1], c=phi[:, gp_num], cmap=cm.RdBu,vmin=0.,vmax=1.,lw=0.5)
+            plt.colorbar(label='GP {} assignment probability'.format(gp_num))
+
+            colors = cm.rainbow(np.linspace(0, 1, phi.shape[1]))
+            for i in range(phi.shape[1]):
+                YY_mu, YY_var = model.predict(XX, i)
+                col = colors[i]
+                plt.plot(YY_mu[:, 0], YY_mu[:, 1], color=col, lw=2);
+
+        else:
+            raise NotImplementedError('Only 1d and 2d regression can be plotted')
+        plt.show()
+
+def OMGPplot_probs(model, X, gp_num=0):
+        """
+        Plot assignment probabilities for each data point of the OMGP model
+        """
+        plt.scatter(X, self.get_phi()[:, gp_num])
+        plt.ylim(-0.1, 1.1)
+        plt.ylabel('GP {} assignment probability'.format(gp_num))
+        plt.show()
+
 
 def MOHGPplot_simple(model,X,Y):
         assert X.shape[1]==1, "can only plot mixtures of 1D functions"
@@ -89,7 +136,12 @@ def MOHGPplot(model, X, Y, on_subplots=True, colour=False, newfig=True, errorbar
             Xgrid[:,i] = v
 
         subplot_count = 0
-        for i, ph, mu, var in zip(range(model.num_clusters), model.get_phihat(), *model.predict_components(Xgrid)):
+        colors = cm.rainbow(np.linspace(0, 1, model.num_clusters))
+        if errorbars:
+            muk, vark = model.predict_components(X)
+
+        for i, ph, mu, var in zip(range(model.num_clusters), model.get_phihat(),\
+          *model.predict_components(Xgrid)):
             if ph>(min_in_cluster):
                 ii = np.argmax(model.get_phi(),1)==i
                 num_in_clust = np.sum(ii)
@@ -98,23 +150,23 @@ def MOHGPplot(model, X, Y, on_subplots=True, colour=False, newfig=True, errorbar
                 if on_subplots:
                     ax = fig.add_subplot(Nx,Ny,subplot_count+1)
                     subplot_count += 1
-                col='k'
+                col=colors[i]
                 if joined:
                     if data_in_grey:
                         ax.plot(X,Y[ii].T,'k',marker=None, linewidth=0.2,alpha=0.4)
                     else:
-                        ax.plot(X,Y[ii].T,col,marker=None, linewidth=0.2,alpha=1)
+                        ax.plot(X,Y[ii].T,color=col,marker=None, linewidth=0.2,alpha=1)
                 else:
                     if data_in_grey:
                         ax.plot(X,Y[ii].T,'k',marker='.', linewidth=0.0,alpha=0.4)
                     else:
-                        ax.plot(X,Y[ii].T,col,marker='.', linewidth=0.0,alpha=1)
+                        ax.plot(X,Y[ii].T,color=col,marker='.', linewidth=0.0,alpha=1)
 
                 if numbered and on_subplots:
                     ax.text(1,1,str(int(num_in_clust)),transform=ax.transAxes,ha='right',va='top',bbox={'ec':'k','lw':1.3,'fc':'w'})
 
-                err = 2*np.sqrt(np.diag(self.Lambda_inv[i,:,:]))
-                if errorbars:ax.errorbar(self.X.flatten(), self.muk[:,i], yerr=err,ecolor=col, elinewidth=2, linewidth=0)
+                err = 2*np.sqrt(np.diag(vark[i,:,:]))
+                if errorbars:ax.errorbar(X.flatten(), muk[:,i], yerr=err,ecolor=col, elinewidth=2, linewidth=0)
 
                 ax.set_ylim(ymin, ymax)
 

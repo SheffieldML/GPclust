@@ -88,6 +88,7 @@ class OMGP(CollapsedMixture):
 
         return mu, va
 
+    @GPflow.param.AutoFlow((tf.float64, [None, None]))
     def predict_components(self, Xnew):
         """The predictive density under each component"""
         mus = []
@@ -99,6 +100,7 @@ class OMGP(CollapsedMixture):
 
         return np.array(mus)[:, :, 0].T, np.array(vas)[:, :, 0].T
     
+    @GPflow.param.AutoFlow((tf.float64, [None, None]))
     def sample(self, Xnew, gp=0, size=10, full_cov=True):
         ''' Sample the posterior of a component
         '''
