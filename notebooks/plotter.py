@@ -16,7 +16,7 @@ def OMGPplot(model, X, Y, gp_num=0):
 
             colors = cm.rainbow(np.linspace(0, 1, phi.shape[1]))
             for i in range(phi.shape[1]):
-                YY_mu, YY_var = model.predict(XX, i)
+                YY_mu, YY_var = model.predict_components(XX)[i]
                 col = colors[i]
                 plt.fill_between(XX[:, 0],
                                  YY_mu[:, 0] - 2 * np.sqrt(YY_var[:, 0]),
