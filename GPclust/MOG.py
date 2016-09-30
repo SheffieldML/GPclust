@@ -116,9 +116,6 @@ class MOG(CollapsedMixture):
 
         return tf.exp(Z)
 
-    @GPflow.param.AutoFlow()
-    def log_likelihood(self):
-        return self.build_likelihood()
 
     @GPflow.param.AutoFlow((tf.float64, [None, None]))
     def predict_components(self, Xnew):

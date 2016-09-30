@@ -83,6 +83,10 @@ class CollapsedMixture(CollapsedVB):
         return phi_hat
 
     @GPflow.param.AutoFlow()
+    def log_likelihood(self):
+        return self.build_likelihood()
+
+    @GPflow.param.AutoFlow()
     def get_phi(self):
         phi = tf.nn.softmax(self.logphi)
         return phi

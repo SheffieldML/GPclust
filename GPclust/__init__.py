@@ -3,4 +3,4 @@
 
 from .MOG import MOG
 from .MOHGP import MOHGP
-# from OMGP import OMGP
+from .OMGP import OMGP
