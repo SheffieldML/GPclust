@@ -93,12 +93,15 @@ class OMGP(CollapsedMixture):
         """The predictive density under each component"""
         mus = []
         vas = []
-        for i in range(len(self.kern)):
+        # For now, the number of kernels is the number of clusters
+        #for i in range(len(self.kern)):
+        for i in range(self.num_clusters):
             mu, va = self.predict(Xnew, i)
             mus.append(mu)
             vas.append(va)
 
-        return np.array(mus)[:, :, 0].T, np.array(vas)[:, :, 0].T
+        #return np.array(mus)[:][:, 0].T, np.array(vas)[:][:, 0].T
+        return mus, vas
 
     @GPflow.param.AutoFlow((tf.float64, [None, None]))
     def sample(self, Xnew, gp=0, size=10, full_cov=True):
