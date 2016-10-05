@@ -10,31 +10,31 @@ def OMGPplot(model, X, Y, gp_num=0):
         """
         XX = np.linspace(X.min(), X.max())[:, None]
         phi = model.get_phi()
-        print 'phi: ', phi.shape
         if Y.shape[1] == 1:
             plt.scatter(X, Y, c=phi[:, gp_num], cmap=cm.RdBu, vmin=0.,vmax=1.,lw=0.5)
             plt.colorbar(label='GP {} assignment probability'.format(gp_num))
 
             colors = cm.rainbow(np.linspace(0, 1, phi.shape[1]))
-            YY_mu, YY_var = model.predict_components(XX)
+            mu, var = model.predict_components(XX)
             for i in range(phi.shape[1]):
                 col = colors[i]
-                plt.fill_between(XX[:, 0],
-                                 YY_mu[:, i] - 2 * np.sqrt(YY_var[:, i]),
-                                 YY_mu[:, i] + 2 * np.sqrt(YY_var[:, i]),
-                                 alpha=0.1,
-                                 facecolor=col)
-                plt.plot(XX, YY_mu[:, i], c=col, lw=2);
+                YY_mu = mu[:,i] 
+                YY_var = var[:,i]
+                plt.fill_between(XX[:, 0],YY_mu - 2.*np.sqrt(YY_var),\
+                                 YY_mu + 2.*np.sqrt(YY_var),alpha=0.1,facecolor=col)
+                plt.plot(XX, YY_mu, c=col, lw=2);
 
         elif Y.shape[1] == 2:
             plt.scatter(Y[:, 0], Y[:, 1], c=phi[:, gp_num], cmap=cm.RdBu,vmin=0.,vmax=1.,lw=0.5)
             plt.colorbar(label='GP {} assignment probability'.format(gp_num))
 
             colors = cm.rainbow(np.linspace(0, 1, phi.shape[1]))
+            mu, var = model.predict_components(XX)
             for i in range(phi.shape[1]):
-                YY_mu, YY_var = model.predict(XX, i)
+                YY_mu = mu[:,i]
+                YY_var = var[:,i]
                 col = colors[i]
-                plt.plot(YY_mu[:, 0], YY_mu[:, 1], color=col, lw=2);
+                plt.plot(YY_mu, YY_mu, color=col, lw=2);
 
         else:
             raise NotImplementedError('Only 1d and 2d regression can be plotted')

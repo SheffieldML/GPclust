@@ -1,10 +1,11 @@
 import numpy as np
+import tensorflow as tf
 
-N = 10; K = 2
+N = 10; K = 4; D = 2
 
-phi = np.random.randn(N,K)
-variance = 1.1
-i = 0
-B_inv = np.diag(1. / ((phi[:, i] + 1e-6) / variance))
-
-
+phi = np.random.randn(N,K,D)
+Z = tf.ones_like(phi,dtype=tf.float32)
+W = Z[:,:,0]
+with tf.Session() as sess:
+    res = sess.run([W])
+    print res[0].shape

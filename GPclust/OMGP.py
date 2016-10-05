@@ -88,7 +88,7 @@ class OMGP(CollapsedMixture):
         kxx = kern.K(Xnew, Xnew)
         va = self.variance + kxx - tf.matmul(tf.transpose(kx), tf.matmul(KB_inv, kx))
 
-        return mu, tf.diag_part(va)
+        return mu[:,0], tf.diag_part(va)
 
     @GPflow.param.AutoFlow((tf.float64, [None, None]))
     def predict_components(self, Xnew):
@@ -102,7 +102,7 @@ class OMGP(CollapsedMixture):
             mus.append(mu)
             vas.append(va)
 
-        return tf.transpose(tf.gather_nd(mus,[0,1])), tf.transpose(vas)
+        return tf.transpose(mus), tf.transpose(vas)
 
 
     @GPflow.param.AutoFlow((tf.float64, [None, None]))
