@@ -91,7 +91,7 @@ class CollapsedVB(GPflow.model.Model):
             elif (method == 'FR'):
                 beta = squareNorm/squareNorm_old
             elif (method == 'HS'):
-                beta = np.dot((natgrad-natgrad_old), grad) / np.dot((natgrad-natgrad_old), grad_old)
+                beta = np.dot((natgrad-natgrad_old), grad) / (np.dot((natgrad-natgrad_old), grad_old) + 1e-6 )
             if np.isnan(beta) or (beta < 0.):
                 beta = 0.
             searchDir = -natgrad + beta * searchDir_old

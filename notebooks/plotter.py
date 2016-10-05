@@ -10,22 +10,23 @@ def OMGPplot(model, X, Y, gp_num=0):
         """
         XX = np.linspace(X.min(), X.max())[:, None]
         phi = model.get_phi()
+        print 'phi: ', phi.shape
         if Y.shape[1] == 1:
             plt.scatter(X, Y, c=phi[:, gp_num], cmap=cm.RdBu, vmin=0.,vmax=1.,lw=0.5)
             plt.colorbar(label='GP {} assignment probability'.format(gp_num))
 
             colors = cm.rainbow(np.linspace(0, 1, phi.shape[1]))
+            YY_mu, YY_var = model.predict_components(XX)
             for i in range(phi.shape[1]):
-                YY_mu, YY_var = model.predict_components(XX)[i]
                 col = colors[i]
                 plt.fill_between(XX[:, 0],
-                                 YY_mu[:, 0] - 2 * np.sqrt(YY_var[:, 0]),
-                                 YY_mu[:, 0] + 2 * np.sqrt(YY_var[:, 0]),
+                                 YY_mu[:, i] - 2 * np.sqrt(YY_var[:, i]),
+                                 YY_mu[:, i] + 2 * np.sqrt(YY_var[:, i]),
                                  alpha=0.1,
                                  facecolor=col)
-                plt.plot(XX, YY_mu[:, 0], c=col, lw=2);
+                plt.plot(XX, YY_mu[:, i], c=col, lw=2);
 
-        elif self.Y.shape[1] == 2:
+        elif Y.shape[1] == 2:
             plt.scatter(Y[:, 0], Y[:, 1], c=phi[:, gp_num], cmap=cm.RdBu,vmin=0.,vmax=1.,lw=0.5)
             plt.colorbar(label='GP {} assignment probability'.format(gp_num))
 
@@ -43,7 +44,7 @@ def OMGPplot_probs(model, X, gp_num=0):
         """
         Plot assignment probabilities for each data point of the OMGP model
         """
-        plt.scatter(X, self.get_phi()[:, gp_num])
+        plt.scatter(X, model.get_phi()[:, gp_num])
         plt.ylim(-0.1, 1.1)
         plt.ylabel('GP {} assignment probability'.format(gp_num))
         plt.show()

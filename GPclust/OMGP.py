@@ -15,7 +15,7 @@ class OMGP(CollapsedMixture):
         num_data, self.D = Y.shape
         self.Y = GPflow.param.DataHolder(Y, on_shape_change='raise')
         self.X = GPflow.param.DataHolder(X, on_shape_change='pass')
-        assert X.shape[0] == self.D, "input data don't match observations"
+        #assert X.shape[0] == self.D, "input data don't match observations"
 
         self.variance = variance
 
@@ -43,8 +43,9 @@ class OMGP(CollapsedMixture):
         # if len(self.kern) > self.num_clusters:
             # self.kern = self.kern[:self.num_clusters]
 
-        for i, kern in enumerate(self.kern):
-            K = kern.K(self.X)
+        #for i, kern in enumerate(self.kern):
+        for i in range(self.num_clusters):
+            K = self.kern[i].K(self.X)
             B_inv = tf.diag(1. / ((phi[:, i] + 1e-6) / self.variance))
 
             # Make more stable using cholesky factorization:
@@ -65,6 +66,7 @@ class OMGP(CollapsedMixture):
 
         return GP_bound - self.build_KL_Z()
 
+
     def predict(self, Xnew, i):
         """ Predictive mean for a given component
         """
@@ -76,17 +78,17 @@ class OMGP(CollapsedMixture):
         # Predict mean
         # This works but should Cholesky for stability
         # B_inv = np.diag(1. / (self.phi[:, i] / self.variance))
-        B_inv = tf.diag(1. / ((phi[:, i] + 1e-6) / self.variance))
+        B_inv = tf.diag(1. / (phi[:, i] / self.variance))
         LB = tf.cholesky(K + B_inv + GPflow.tf_wraps.eye(self.D) * 1e-6)
         # K_B_inv = pdinv(K + B_inv)[0]
-        K_B_inv = tf.matrix_triangular_solve(LB, GPflow.tf_wraps.eye(self.D), lower=True)
-        mu = tf.matmul(tf.transpose(kx), tf.matmul(K_B_inv, self.Y))
+        KB_inv = tf.matrix_triangular_solve(LB, GPflow.tf_wraps.eye(self.num_data), lower=True)        
+        mu = tf.matmul(tf.transpose(kx), tf.matmul(KB_inv, self.Y))
 
         # Predict variance
         kxx = kern.K(Xnew, Xnew)
-        va = self.variance + kxx - tf.matmul(tf.transpose(kx), tf.matmul(K_B_inv, kx))
+        va = self.variance + kxx - tf.matmul(tf.transpose(kx), tf.matmul(KB_inv, kx))
 
-        return mu, va
+        return mu, tf.diag_part(va)
 
     @GPflow.param.AutoFlow((tf.float64, [None, None]))
     def predict_components(self, Xnew):
@@ -100,8 +102,8 @@ class OMGP(CollapsedMixture):
             mus.append(mu)
             vas.append(va)
 
-        #return np.array(mus)[:][:, 0].T, np.array(vas)[:][:, 0].T
-        return mus, vas
+        return tf.transpose(tf.gather_nd(mus,[0,1])), tf.transpose(vas)
+
 
     @GPflow.param.AutoFlow((tf.float64, [None, None]))
     def sample(self, Xnew, gp=0, size=10, full_cov=True):

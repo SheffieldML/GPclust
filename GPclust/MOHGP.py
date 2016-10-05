@@ -34,7 +34,7 @@ class MOHGP(CollapsedMixture):
         num_data, self.D = Y.shape
         self.Y = GPflow.param.DataHolder(Y, on_shape_change='raise')
         self.X = GPflow.param.DataHolder(X, on_shape_change='pass')
-        assert X.shape[0] == self.D, "input data don't match observations"
+        #assert X.shape[1] == self.D, "input data don't match observations"
 
         CollapsedMixture.__init__(self, num_data, num_clusters, prior_Z, alpha)
 
