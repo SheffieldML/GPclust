@@ -23,7 +23,8 @@ class OMGP(CollapsedMixture):
 
         if kernels is None:
             kernels = []
-            for i in range(num_clusters):
+            #for i in range(self.num_clusters):
+            for i in range(10):
                 kernels.append(GPflow.kernels.RBF(input_dim=1))
         self.kern = GPflow.param.ParamList(kernels)
 
@@ -67,42 +68,44 @@ class OMGP(CollapsedMixture):
         return GP_bound - self.build_KL_Z()
 
 
-    def predict(self, Xnew, i):
+    def predict(self, Xnew, i, phi=None):
         """ Predictive mean for a given component
         """
-        phi = tf.nn.softmax(self.logphi)
+        if phi is None:
+            phi = tf.nn.softmax(self.logphi)
         kern = self.kern[i]
         K = kern.K(self.X)
         kx = kern.K(self.X, Xnew)
 
+        # Notation is from pages 3-5 of M. Lazaro-Gredilla et al. / Overlapping Mixtures of 
+        #Gaussian Processes for the data association problem (used original equations - not
+        # "stable" ones)
         # Predict mean
-        # This works but should Cholesky for stability
-        # B_inv = np.diag(1. / (self.phi[:, i] / self.variance))
-        B_inv = tf.diag(1. / (phi[:, i] / self.variance))
-        LB = tf.cholesky(K + B_inv + GPflow.tf_wraps.eye(self.D) * 1e-6)
-        # K_B_inv = pdinv(K + B_inv)[0]
-        KB_inv = tf.matrix_triangular_solve(LB, GPflow.tf_wraps.eye(self.num_data), lower=True)        
-        mu = tf.matmul(tf.transpose(kx), tf.matmul(KB_inv, self.Y))
+        B_inv = tf.diag(1. / ((phi[:, i] + 1e-6) / self.variance))
+        LB = tf.cholesky(K + B_inv + GPflow.tf_wraps.eye(self.num_data)*1e-6)
+        mu = tf.matmul(tf.transpose(kx), tf.cholesky_solve(LB, self.Y))
 
         # Predict variance
         kxx = kern.K(Xnew, Xnew)
-        va = self.variance + kxx - tf.matmul(tf.transpose(kx), tf.matmul(KB_inv, kx))
+        va = self.variance + kxx - tf.matmul(tf.transpose(kx), tf.cholesky_solve(LB, kx))
 
-        return mu[:,0], tf.diag_part(va)
+        return mu, tf.diag_part(va)
+
 
     @GPflow.param.AutoFlow((tf.float64, [None, None]))
     def predict_components(self, Xnew):
         """The predictive density under each component"""
+        phi = tf.nn.softmax(self.logphi)
         mus = []
         vas = []
         # For now, the number of kernels is the number of clusters
         #for i in range(len(self.kern)):
         for i in range(self.num_clusters):
-            mu, va = self.predict(Xnew, i)
+            mu, va = self.predict(Xnew, i, phi)
             mus.append(mu)
             vas.append(va)
 
-        return tf.transpose(mus), tf.transpose(vas)
+        return tf.transpose(tf.squeeze(tf.pack(mus),[2])), tf.transpose(tf.pack(vas))
 
 
     @GPflow.param.AutoFlow((tf.float64, [None, None]))
