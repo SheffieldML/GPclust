@@ -17,14 +17,15 @@ class OMGP(CollapsedMixture):
         self.X = GPflow.param.DataHolder(X, on_shape_change='pass')
         #assert X.shape[0] == self.D, "input data don't match observations"
 
-        self.variance = variance
+        self.TWOPI = 2.0*np.pi
+        self.variance = tf.Variable(variance,dtype=tf.float64,name='variance')
 
         CollapsedMixture.__init__(self, num_data, num_clusters, prior_Z, alpha)
 
         if kernels is None:
             kernels = []
-            #for i in range(self.num_clusters):
-            for i in range(10):
+            for i in range(self.num_clusters):
+            #for i in range(10):
                 kernels.append(GPflow.kernels.RBF(input_dim=1))
         self.kern = GPflow.param.ParamList(kernels)
 
@@ -51,7 +52,7 @@ class OMGP(CollapsedMixture):
 
             # Make more stable using cholesky factorization:
             # Bi, LB, LBi, Blogdet = pdinv(K+B_inv)
-            LB = tf.cholesky(K + B_inv + GPflow.tf_wraps.eye(self.D) * 1e-6)
+            LB = tf.cholesky(K + B_inv + GPflow.tf_wraps.eye(self.num_data) * 1e-6)
             Blogdet = 2.*tf.reduce_sum(tf.log(tf.diag_part(LB)))
             # Data fit
             # GP_bound -= .5 * dpotrs(LB, self.YYT)[0].trace()
@@ -63,7 +64,7 @@ class OMGP(CollapsedMixture):
             # Constant, weighted by  model assignment per point
             # GP_bound += -0.5 * (self.phi[:, i] * np.log(2 * np.pi * self.variance)).sum()
             # GP_bound -= .5*self.D * np.einsum('j,j->',self.phi[:, i], np.log(2*np.pi*self.variance))
-            GP_bound -= 0.5*self.D*tf.reduce_sum(tf.mul(phi[:, i], np.log(2.*np.pi*self.variance)))
+            GP_bound -= 0.5*self.D*tf.reduce_sum(tf.mul(phi[:, i],tf.log(self.TWOPI*self.variance)))
 
         return GP_bound - self.build_KL_Z()
 
@@ -124,3 +125,7 @@ class OMGP(CollapsedMixture):
             samples.append(smp)
 
         return np.stack(samples, -1)
+    
+    @GPflow.param.AutoFlow()
+    def get_variance(self):
+        return self.variance
