@@ -129,3 +129,15 @@ class OMGP(CollapsedMixture):
     @GPflow.param.AutoFlow()
     def get_variance(self):
         return self.variance
+
+    @GPflow.param.AutoFlow()
+    def vb_bound_grad_natgrad(self):
+        """
+        Natural Gradients of the bound with respect to the variational
+        parameters controlling assignment of the data to clusters
+        """
+        bound = self.build_likelihood()
+        grad, = tf.gradients(bound, tf.concat(0,[self.logphi,tf.expand_dims(self.variance,0)]))
+        natgrad = grad[:-1] / tf.nn.softmax(self.logphi)
+        grad, natgrad = tf.clip_by_value(grad, -100, 100), tf.clip_by_value(natgrad, -100, 100)
+        return bound, tf.reshape(grad, [-1]), tf.reshape(natgrad, [-1])

@@ -101,7 +101,7 @@ class CollapsedVB(GPflow.model.Model):
             try:
                 self.set_vb_param(x_old + step_length * searchDir)
                 bound, _, _ = self.vb_bound_grad_natgrad()
-            except LinAlgError:  # WHat is the exception in tensorflow?
+            except LinAlgError:  # Waat is the exception in tensorflow?
                 self.set_vb_param(x_old)
                 bound = bound_old - 1
 
