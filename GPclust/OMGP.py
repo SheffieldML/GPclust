@@ -11,15 +11,14 @@ class OMGP(CollapsedMixture):
     """
     Overlapping mixtures of Gaussian processes
     """
-    def __init__(self, X, Y, num_clusters=2, kernels=None, variance=1., alpha=1., prior_Z='symmetric', name='OMGP'):
+    def __init__(self, X, Y, num_clusters=2, kernels=None, noise_variance=1., alpha=1., prior_Z='symmetric', name='OMGP'):
         num_data, self.D = Y.shape
         self.Y = GPflow.param.DataHolder(Y, on_shape_change='raise')
         self.X = GPflow.param.DataHolder(X, on_shape_change='pass')
         #assert X.shape[0] == self.D, "input data don't match observations"
 
         self.TWOPI = 2.0*np.pi
-        self.variance = variance
-
+        self.noise_variance = GPflow.param.Param(noise_variance, transform=GPflow.transforms.positive)
         CollapsedMixture.__init__(self, num_data, num_clusters, prior_Z, alpha)
 
         if kernels is None:
@@ -48,7 +47,7 @@ class OMGP(CollapsedMixture):
         #for i, kern in enumerate(self.kern):
         for i in range(self.num_clusters):
             K = self.kern[i].K(self.X)
-            B_inv = tf.diag(1. / ((phi[:, i] + 1e-6) / self.variance))
+            B_inv = tf.diag(1. / ((phi[:, i] + 1e-6) / self.noise_variance))
 
             # Make more stable using cholesky factorization:
             # Bi, LB, LBi, Blogdet = pdinv(K+B_inv)
@@ -62,9 +61,9 @@ class OMGP(CollapsedMixture):
             GP_bound -= 0.5 * Blogdet
 
             # Constant, weighted by  model assignment per point
-            # GP_bound += -0.5 * (self.phi[:, i] * np.log(2 * np.pi * self.variance)).sum()
-            # GP_bound -= .5*self.D * np.einsum('j,j->',self.phi[:, i], np.log(2*np.pi*self.variance))
-            GP_bound -= 0.5*self.D*tf.reduce_sum(tf.mul(phi[:, i],np.log(self.TWOPI*self.variance)))
+            # GP_bound += -0.5 * (self.phi[:, i] * np.log(2 * np.pi * self.noise_variance)).sum()
+            # GP_bound -= .5*self.D * np.einsum('j,j->',self.phi[:, i], np.log(2*np.pi*self.noise_variance))
+            GP_bound -= 0.5*self.D*tf.reduce_sum(tf.mul(phi[:, i],tf.log(self.TWOPI*self.noise_variance)))
 
         return GP_bound - self.build_KL_Z()
 
@@ -82,13 +81,13 @@ class OMGP(CollapsedMixture):
         #Gaussian Processes for the data association problem (used original equations - not
         # "stable" ones)
         # Predict mean
-        B_inv = tf.diag(1. / ((phi[:, i] + 1e-6) / self.variance))
+        B_inv = tf.diag(1. / ((phi[:, i] + 1e-6) / self.noise_variance))
         LB = tf.cholesky(K + B_inv + GPflow.tf_wraps.eye(self.num_data)*1e-6)
         mu = tf.matmul(tf.transpose(kx), tf.cholesky_solve(LB, self.Y))
 
         # Predict variance
         kxx = kern.K(Xnew, Xnew)
-        va = self.variance + kxx - tf.matmul(tf.transpose(kx), tf.cholesky_solve(LB, kx))
+        va = self.noise_variance + kxx - tf.matmul(tf.transpose(kx), tf.cholesky_solve(LB, kx))
 
         return mu, tf.diag_part(va)
 
