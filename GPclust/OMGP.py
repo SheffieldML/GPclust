@@ -18,7 +18,7 @@ class OMGP(CollapsedMixture):
         #assert X.shape[0] == self.D, "input data don't match observations"
 
         self.TWOPI = 2.0*np.pi
-        self.variance = tf.Variable(variance,dtype=tf.float64,name='variance')
+        self.variance = variance
 
         CollapsedMixture.__init__(self, num_data, num_clusters, prior_Z, alpha)
 
@@ -64,7 +64,7 @@ class OMGP(CollapsedMixture):
             # Constant, weighted by  model assignment per point
             # GP_bound += -0.5 * (self.phi[:, i] * np.log(2 * np.pi * self.variance)).sum()
             # GP_bound -= .5*self.D * np.einsum('j,j->',self.phi[:, i], np.log(2*np.pi*self.variance))
-            GP_bound -= 0.5*self.D*tf.reduce_sum(tf.mul(phi[:, i],tf.log(self.TWOPI*self.variance)))
+            GP_bound -= 0.5*self.D*tf.reduce_sum(tf.mul(phi[:, i],np.log(self.TWOPI*self.variance)))
 
         return GP_bound - self.build_KL_Z()
 
@@ -126,18 +126,3 @@ class OMGP(CollapsedMixture):
 
         return np.stack(samples, -1)
     
-    @GPflow.param.AutoFlow()
-    def get_variance(self):
-        return self.variance
-
-    @GPflow.param.AutoFlow()
-    def vb_bound_grad_natgrad(self):
-        """
-        Natural Gradients of the bound with respect to the variational
-        parameters controlling assignment of the data to clusters
-        """
-        bound = self.build_likelihood()
-        grad, = tf.gradients(bound, tf.concat(0,[self.logphi,tf.expand_dims(self.variance,0)]))
-        natgrad = grad[:-1] / tf.nn.softmax(self.logphi)
-        grad, natgrad = tf.clip_by_value(grad, -100, 100), tf.clip_by_value(natgrad, -100, 100)
-        return bound, tf.reshape(grad, [-1]), tf.reshape(natgrad, [-1])
