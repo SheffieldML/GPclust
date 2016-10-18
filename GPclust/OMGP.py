@@ -18,7 +18,8 @@ class OMGP(CollapsedMixture):
         #assert X.shape[0] == self.D, "input data don't match observations"
 
         self.TWOPI = 2.0*np.pi
-        self.noise_variance = GPflow.param.Param(noise_variance, transform=GPflow.transforms.positive)
+        self.noise_variance = GPflow.param.Param(noise_variance, transform=GPflow.transforms.Logexp)
+
         CollapsedMixture.__init__(self, num_data, num_clusters, prior_Z, alpha)
 
         if kernels is None:
@@ -63,7 +64,7 @@ class OMGP(CollapsedMixture):
             # Constant, weighted by  model assignment per point
             # GP_bound += -0.5 * (self.phi[:, i] * np.log(2 * np.pi * self.noise_variance)).sum()
             # GP_bound -= .5*self.D * np.einsum('j,j->',self.phi[:, i], np.log(2*np.pi*self.noise_variance))
-            GP_bound -= 0.5*self.D*tf.reduce_sum(tf.mul(phi[:, i],tf.log(self.TWOPI*self.noise_variance)))
+            GP_bound -= 0.5*tf.reduce_sum(tf.mul(phi[:, i],tf.log(self.TWOPI*self.noise_variance)))
 
         return GP_bound - self.build_KL_Z()
 

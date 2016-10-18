@@ -101,7 +101,7 @@ class CollapsedVB(GPflow.model.Model):
             try:
                 self.set_vb_param(x_old + step_length * searchDir)
                 bound, _, _ = self.vb_bound_grad_natgrad()
-            except LinAlgError:  # Waat is the exception in tensorflow?
+            except LinAlgError:  # What is the exception in tensorflow?
                 self.set_vb_param(x_old)
                 bound = bound_old - 1
 
@@ -156,7 +156,7 @@ class CollapsedVB(GPflow.model.Model):
             grad_old = grad
             searchDir_old = searchDir
             squareNorm_old = squareNorm
-
+ 
             # hyper param_optimisation
             if ((iteration > 1) and not (iteration % self.hyperparam_interval)) or iteration_failed:
                 self.optimize_parameters()
@@ -169,7 +169,7 @@ class CollapsedVB(GPflow.model.Model):
         Returns the increment in the bound acheived
         """
         if self.get_free_state().size > 0:
-            start = self.bound()
+            start = self.compute_log_likelihood()
             GPflow.model.Model.optimize(self, **self.hyperparam_opt_args)
             return self.compute_log_likelihood() - start
         else:
