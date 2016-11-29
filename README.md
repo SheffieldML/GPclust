@@ -3,7 +3,7 @@ GPclust
 
 Clustering time series using Gaussian processes and variational Bayes. 
 
-User guide and tutorials are available via the included [notebooks](https://github.com/jameshensman/GPclust/blob/master/notebooks/index.ipynb). 
+User guide and tutorials are available via the included [notebooks](https://github.com/mathDR/GPclust/tree/gpflowbase/notebooks/index.ipynb). 
 
 Currently implemented models are
 
@@ -81,9 +81,8 @@ Additionally Overlapping Mixtures of Gaussian Processes model is implemented (us
 Dependencies
 ------------
 
-This work depends on the [GPy project](https://github.com/SheffieldML/GPy), as well as the numpy/scipy stack. matplotlib is optional for plotting. 
-
-I've tested the demos with GPy v0.8, but it should work with later versions also. 
+This work depends on the [GPflow project](https://github.com/GPflow), as well as the 
+numpy/scipy stack. matplotlib is optional for plotting. 
 
 
 Contributors
@@ -92,3 +91,4 @@ Contributors
 - James Hensman
 - Valentine Svensson
 - Max Zwiessele
+- Daniel Marthaler
