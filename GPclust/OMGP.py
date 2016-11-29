@@ -18,7 +18,7 @@ class OMGP(CollapsedMixture):
         #assert X.shape[0] == self.D, "input data don't match observations"
 
         self.TWOPI = 2.0*np.pi
-        self.noise_variance = GPflow.param.Param(noise_variance, transform=GPflow.transforms.Logexp)
+        self.noise_variance = GPflow.param.Param(noise_variance, transform=GPflow.transforms.positive)
 
         CollapsedMixture.__init__(self, num_data, num_clusters, prior_Z, alpha)
 
