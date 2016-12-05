@@ -102,7 +102,7 @@ class CollapsedMixture(CollapsedVB):
         """
         bound = self.build_likelihood()
         grad, = tf.gradients(bound, self.logphi)
-        natgrad = grad / tf.nn.softmax(self.logphi)
+        natgrad = grad / (tf.nn.softmax(self.logphi) + 1e-6)
         grad, natgrad = tf.clip_by_value(grad, -100, 100), tf.clip_by_value(natgrad, -100, 100)
         return bound, tf.reshape(grad, [-1]), tf.reshape(natgrad, [-1])
 

@@ -38,14 +38,15 @@ class MOG(CollapsedMixture):
         # store the prior cluster parameters
         self.m0 = X.mean(0) if prior_m is None else prior_m
         self.k0 = prior_kappa
-        self.S0 = GPflow.tf_wraps.eye(self.D)*1.e-3 if prior_S is None else prior_S
-        self.v0 = prior_v or tf.to_double(self.D + 1.)
+        self.S0 = np.eye(self.D)*1.e-3 if prior_S is None else prior_S
+        self.v0 = prior_v or np.array(self.D + 1.)
 
         # precomputed stuff
         self.k0m0m0T = GPflow.param.DataHolder(self.k0*self.m0[:, np.newaxis]*self.m0[np.newaxis, :])
         XXT = X[:, :, np.newaxis]*X[:, np.newaxis, :]
         self.XXT = XXT
-        self.S0_halflogdet = tf.reduce_sum(tf.log(tf.sqrt(tf.diag_part(tf.cholesky(self.S0)))))
+        # self.S0_halflogdet = tf.reduce_sum(tf.log(tf.sqrt(tf.diag_part(tf.cholesky(self.S0)))))
+        self.S0_halflogdet = np.sum(np.log(np.sqrt(np.diag(np.linalg.cholesky(self.S0)))))
 
         CollapsedMixture.__init__(self, self.num_data, num_clusters, prior_Z, alpha)
 
@@ -70,13 +71,13 @@ class MOG(CollapsedMixture):
         # self.Sns = self.S0[:, :, None] + Ck + self.k0m0m0T[:, :, None] - self.kNs[None, None, :]*self.munmunT
         Sns = tf.expand_dims(self.S0 + self.k0m0m0T, 0) + Ck - tf.reshape(kNs, [-1, 1, 1]) * munmunT
         # self.Sns_inv, self.Sns_halflogdet = multiple_pdinv(self.Sns)
-        Sns_chol = tf.batch_cholesky(Sns)
+        Sns_chol = tf.cholesky(Sns)
         return kNs, vNs, mun, Sns_chol
 
     def build_likelihood(self):
         kNs, vNs, _, Sns_chol = self.get_components()
 
-        Sns_logdet = 2 * tf.reduce_sum(tf.log(tf.batch_matrix_diag_part(Sns_chol)), 1)
+        Sns_logdet = 2 * tf.reduce_sum(tf.log(tf.matrix_diag_part(Sns_chol)), 1)
 
         return -0.5*self.D*tf.reduce_sum(tf.log(kNs/self.k0))\
             + self.num_clusters*self.v0*self.S0_halflogdet - 0.5 * tf.reduce_sum(vNs * Sns_logdet)\
@@ -92,8 +93,8 @@ class MOG(CollapsedMixture):
 
         RHS = tf.reshape(tf.tile(GPflow.tf_wraps.eye(self.D),tf.pack([tf.shape(Sns_chol)[0],1])),\
             tf.pack([tf.shape(Sns_chol)[0],self.D,self.D]))
-        Sns_invs = tf.batch_cholesky_solve(Sns_chol,RHS) # Is there a better way to do this?
-        Sns_logdet = 2 * tf.reduce_sum(tf.log(tf.batch_matrix_diag_part(Sns_chol)), 1)
+        Sns_invs = tf.cholesky_solve(Sns_chol,RHS) # Is there a better way to do this?
+        Sns_logdet = 2 * tf.reduce_sum(tf.log(tf.matrix_diag_part(Sns_chol)), 1)
 
         # The original SheffieldML lines
         #Dist = Xnew[:,:,np.newaxis]-self.mun[np.newaxis,:,:] # Nnew x D x K

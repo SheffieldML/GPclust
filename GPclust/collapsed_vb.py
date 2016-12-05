@@ -81,6 +81,10 @@ class CollapsedVB(GPflow.model.Model):
 
             bound, grad, natgrad = self.vb_bound_grad_natgrad()
             grad, natgrad = -grad, -natgrad
+            if np.any(np.isnan(natgrad)):
+                stop
+            if np.any(np.isnan(grad)):
+                stop
             squareNorm = np.dot(natgrad, grad)  # used to monitor convergence
 
             # find search direction
@@ -156,7 +160,7 @@ class CollapsedVB(GPflow.model.Model):
             grad_old = grad
             searchDir_old = searchDir
             squareNorm_old = squareNorm
- 
+
             # hyper param_optimisation
             if ((iteration > 1) and not (iteration % self.hyperparam_interval)) or iteration_failed:
                 self.optimize_parameters()
