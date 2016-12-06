@@ -52,12 +52,12 @@ class OMGP(CollapsedMixture):
             LB = tf.cholesky(K + B_inv + GPflow.tf_wraps.eye(self.num_data) * 1e-6)
             Blogdet = 2.*tf.reduce_sum(tf.log(tf.diag_part(LB)))
             # Data fit
-            GP_bound -= 0.5 * tf.trace(tf.matrix_triangular_solve(LB, self.YYT))
+            GP_bound -= 0.5 * tf.trace(tf.cholesky_solve(LB, self.YYT))
             # Penalty
             GP_bound -= 0.5 * Blogdet
 
             # Constant, weighted by  model assignment per point
-            GP_bound -= 0.5*tf.reduce_sum(tf.mul(phi[:, i],tf.log(self.TWOPI*self.noise_variance)))
+            GP_bound -= 0.5*self.D*tf.reduce_sum(tf.mul(phi[:, i],tf.log(self.TWOPI*self.noise_variance)))
 
         return GP_bound - self.build_KL_Z()
 
