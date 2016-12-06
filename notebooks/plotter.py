@@ -138,8 +138,7 @@ def MOHGPplot(model, X, Y, on_subplots=True, colour=False, newfig=True, errorbar
 
     subplot_count = 0
     colors = cm.rainbow(np.linspace(0, 1, model.num_clusters))
-    if errorbars:
-        muk, vark = model.predict_components(X)
+    muk, vark = model.predict_components(X)
 
     for i, ph, mu, var in zip(range(model.num_clusters), model.get_phihat(),\
       *model.predict_components(Xgrid)):
