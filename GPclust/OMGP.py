@@ -25,7 +25,6 @@ class OMGP(CollapsedMixture):
         if kernels is None:
             kernels = []
             for i in range(self.num_clusters):
-            #for i in range(10):
                 kernels.append(GPflow.kernels.RBF(input_dim=1))
         self.kern = GPflow.param.ParamList(kernels)
 
@@ -45,25 +44,19 @@ class OMGP(CollapsedMixture):
         # if len(self.kern) > self.num_clusters:
             # self.kern = self.kern[:self.num_clusters]
 
-        #for i, kern in enumerate(self.kern):
         for i in range(self.num_clusters):
             K = self.kern[i].K(self.X)
             B_inv = tf.diag(1. / ((phi[:, i] + 1e-6) / self.noise_variance))
 
             # Make more stable using cholesky factorization:
-            # Bi, LB, LBi, Blogdet = pdinv(K+B_inv)
             LB = tf.cholesky(K + B_inv + GPflow.tf_wraps.eye(self.num_data) * 1e-6)
             Blogdet = 2.*tf.reduce_sum(tf.log(tf.diag_part(LB)))
             # Data fit
-            # GP_bound -= .5 * dpotrs(LB, self.YYT)[0].trace()
             GP_bound -= 0.5 * tf.trace(tf.matrix_triangular_solve(LB, self.YYT))
             # Penalty
-            # GP_bound += -0.5 * np.linalg.slogdet(K + B_inv)[1]
             GP_bound -= 0.5 * Blogdet
 
             # Constant, weighted by  model assignment per point
-            # GP_bound += -0.5 * (self.phi[:, i] * np.log(2 * np.pi * self.noise_variance)).sum()
-            # GP_bound -= .5*self.D * np.einsum('j,j->',self.phi[:, i], np.log(2*np.pi*self.noise_variance))
             GP_bound -= 0.5*tf.reduce_sum(tf.mul(phi[:, i],tf.log(self.TWOPI*self.noise_variance)))
 
         return GP_bound - self.build_KL_Z()

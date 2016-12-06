@@ -45,7 +45,6 @@ class MOG(CollapsedMixture):
         self.k0m0m0T = GPflow.param.DataHolder(self.k0*self.m0[:, np.newaxis]*self.m0[np.newaxis, :])
         XXT = X[:, :, np.newaxis]*X[:, np.newaxis, :]
         self.XXT = XXT
-        # self.S0_halflogdet = tf.reduce_sum(tf.log(tf.sqrt(tf.diag_part(tf.cholesky(self.S0)))))
         self.S0_halflogdet = np.sum(np.log(np.sqrt(np.diag(np.linalg.cholesky(self.S0)))))
 
         CollapsedMixture.__init__(self, self.num_data, num_clusters, prior_Z, alpha)
@@ -59,18 +58,12 @@ class MOG(CollapsedMixture):
         # computations needed for bound, gradient and predictions
         kNs = phi_hat + self.k0
         vNs = phi_hat + self.v0
-        # Xsumk = np.tensordot(self.X, self.phi, ((0), (0)))  # D x K
         Xsumk = tf.matmul(tf.transpose(phi), self.X)  # K x D
-        # Ck = np.tensordot(self.phi, self.XXT, ((0), (0))).T  # D x D x K
         Ck = tf.reduce_sum(tf.expand_dims(tf.expand_dims(tf.transpose(phi), 2), 2)
                            * tf.expand_dims(self.XXT, 0), 1)  # K x D x D
-        # self.mun = (self.k0*self.m0[:, None] + self.Xsumk)/self.kNs[None, :]  # D x K
         mun = (self.k0 * tf.reshape(self.m0, [1, -1]) + Xsumk) / tf.reshape(kNs, [-1, 1])  # K x D
-        # self.munmunT = self.mun[:, None, :]*self.mun[None, :, :]
         munmunT = tf.expand_dims(mun, 1) * tf.expand_dims(mun, 2)  # K x D x D
-        # self.Sns = self.S0[:, :, None] + Ck + self.k0m0m0T[:, :, None] - self.kNs[None, None, :]*self.munmunT
         Sns = tf.expand_dims(self.S0 + self.k0m0m0T, 0) + Ck - tf.reshape(kNs, [-1, 1, 1]) * munmunT
-        # self.Sns_inv, self.Sns_halflogdet = multiple_pdinv(self.Sns)
         Sns_chol = tf.cholesky(Sns)
         return kNs, vNs, mun, Sns_chol
 
@@ -96,16 +89,8 @@ class MOG(CollapsedMixture):
         Sns_invs = tf.cholesky_solve(Sns_chol,RHS) # Is there a better way to do this?
         Sns_logdet = 2 * tf.reduce_sum(tf.log(tf.matrix_diag_part(Sns_chol)), 1)
 
-        # The original SheffieldML lines
-        #Dist = Xnew[:,:,np.newaxis]-self.mun[np.newaxis,:,:] # Nnew x D x K
-        #tmp = np.sum(Dist[:,:,None,:]*self.Sns_inv[None,:,:,:],1)#*(kn+1.)/(kn*(vn-self.D+1.))
-        #mahalanobis = np.sum(tmp*Dist, 1)/(self.kNs+1.)*self.kNs*(self.vNs-self.D+1.)
-        #halflndetSigma = self.Sns_halflogdet + 0.5*self.D*np.log((self.kNs+1.)/(self.kNs*(self.vNs-self.D+1.)))
 
         Dist = tf.sub(tf.expand_dims(Xnew, 1), tf.expand_dims(mun, 0))  # Nnew x K x D
-        # Tensorflow does not support the following broadcast (Nnew, num_clusters, D) * (num_clusters, D, D)
-        # tmp = tf.reduce_sum(tf.mul(tf.expand_dims(Dist, 2), tf.expand_dims(self.Sns_inv, 0)), 1)
-        # So we will tile self.Sns_inv Nnew times to do the multiplication
         h = tf.tile(tf.expand_dims(Sns_invs, 0), tf.pack([tf.shape(Dist)[0], 1, 1, 1]))
         tmp = tf.reduce_sum(tf.mul(tf.expand_dims(Dist, 3), h), 2) # N x K x D
         mahalanobis = tf.reduce_sum(tf.mul(tmp, Dist), 2)/(kNs+1.)*kNs*(vNs-self.D+1.) # N x K
