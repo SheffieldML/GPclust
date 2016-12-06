@@ -66,12 +66,12 @@ class MOHGP(CollapsedMixture):
         tmp = tf.matrix_triangular_solve(Sy_chol, tf.transpose(tmp1), lower=True)
 
         Cs = tf.expand_dims(GPflow.tf_wraps.eye(self.D), 0) + tf.expand_dims(tmp, 0) * tf.reshape(phi_hat, tile_shape)
-        C_chols = tf.batch_cholesky(Cs + tf.expand_dims(GPflow.tf_wraps.eye(self.D), 0) * 1e-6)
-        log_det_diff_sum = 2 * tf.reduce_sum(tf.log(tf.batch_matrix_diag_part(C_chols)))
+        C_chols = tf.cholesky(Cs + tf.expand_dims(GPflow.tf_wraps.eye(self.D), 0) * 1e-6)
+        log_det_diff_sum = 2 * tf.reduce_sum(tf.log(tf.matrix_diag_part(C_chols)))
 
         L_tiled = tf.tile(tf.expand_dims(tf.transpose(Sy_chol), 0), tile_shape)
-        tmp = tf.batch_matrix_triangular_solve(C_chols, L_tiled, lower=True)
-        tmp2 = tf.batch_matmul(tf.batch_matrix_transpose(tmp), tmp)
+        tmp = tf.matrix_triangular_solve(C_chols, L_tiled, lower=True)
+        tmp2 = tf.matmul(tf.matrix_transpose(tmp), tmp)
         Lambda_inv = (tf.expand_dims(Sy, 0) - tmp2) / tf.reshape(phi_hat, tile_shape)
 
         Li_ybark = tf.matrix_triangular_solve(Sy_chol, ybark, lower=True)
@@ -112,28 +112,28 @@ class MOHGP(CollapsedMixture):
         Cs = tf.expand_dims(GPflow.tf_wraps.eye(self.D), 0) + tf.expand_dims(tmp, 0) * tf.reshape(phi_hat, tile_shape)
 
         # self._C_chols = [jitchol(C) for C in self.Cs]
-        C_chols = tf.batch_cholesky(Cs + tf.expand_dims(GPflow.tf_wraps.eye(self.D), 0) * 1e-6)
+        C_chols = tf.cholesky(Cs + tf.expand_dims(GPflow.tf_wraps.eye(self.D), 0) * 1e-6)
 
         # tmp = [dtrtrs(L, self.Sy_chol_inv, lower=1)[0] for L in self._C_chols]
         # B_invs = [phi_hat_i*np.dot(tmp_i.T, tmp_i) for phi_hat_i, tmp_i in zip(self.phi_hat, tmp)]
-        tmp = tf.batch_matrix_triangular_solve(C_chols, Sy_chol_inv_tiled, lower=True)
-        B_invs = tf.batch_matmul(tf.batch_matrix_transpose(tmp), tmp) * tf.reshape(phi_hat, tile_shape)
+        tmp = tf.matrix_triangular_solve(C_chols, Sy_chol_inv_tiled, lower=True)
+        B_invs = tf.matmul(tf.matrix_transpose(tmp), tmp) * tf.reshape(phi_hat, tile_shape)
 
         kx = self.kernF.K(self.X, Xnew)
         kx_tiled = tf.tile(tf.expand_dims(kx, 0), tile_shape)
         kxx = self.kernF.K(Xnew) + self.kernY.K(Xnew)
 
         # tmp = [np.eye(self.D) - np.dot(Bi,self.Sf) for Bi in B_invs]
-        tmp = tf.expand_dims(GPflow.tf_wraps.eye(self.D), 0) - tf.batch_matmul(B_invs, Sf_tiled)
+        tmp = tf.expand_dims(GPflow.tf_wraps.eye(self.D), 0) - tf.matmul(B_invs, Sf_tiled)
 
         # mu = [mdot(kx.T,tmpi,self.Sy_inv,ybark) for tmpi,ybark in zip(tmp,self.ybark.T)]
-        tmp = tf.batch_matmul(tf.batch_matrix_transpose(kx_tiled), tmp)
-        tmp = tf.batch_matmul(tmp, Sy_inv_tiled)
-        mu = tf.batch_matmul(tmp, tf.expand_dims(tf.transpose(ybark), 2))
+        tmp = tf.matmul(tf.matrix_transpose(kx_tiled), tmp)
+        tmp = tf.matmul(tmp, Sy_inv_tiled)
+        mu = tf.matmul(tmp, tf.expand_dims(tf.transpose(ybark), 2))
 
         # var = [kxx - mdot(kx.T,Bi,kx) foBi in B_invs]
-        tmp = tf.batch_matmul(B_invs, kx_tiled)
-        tmp = tf.batch_matmul(tf.batch_matrix_transpose(kx_tiled), tmp)
+        tmp = tf.matmul(B_invs, kx_tiled)
+        tmp = tf.matmul(tf.matrix_transpose(kx_tiled), tmp)
         var = tf.expand_dims(kxx, 0) - tmp
 
         return mu, var
