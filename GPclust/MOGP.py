@@ -25,7 +25,7 @@ class MOGP(CollapsedMixture):
     name     - A convenient string for printing the model (default MOHGP)
 
     """
-    def __init__(self, X, Y, kern, likelihood, num_clusters=2, alpha=1., prior_Z='symmetric'):
+    def __init__(self, X, Y, Z=None, kern=None, likelihood=None, num_clusters=2, alpha=1., prior_Z='symmetric'):
 
         assert len(X) == len(Y)
         for x, y in zip(X, Y):
@@ -37,6 +37,10 @@ class MOGP(CollapsedMixture):
 
         self.kern = kern
         self.likelihood = likelihood
+        if Z is None:
+            # Choose 10 inducing points across the range of X
+            Z = np.linspace(np.min(X),np.max(X),10)
+        
         self.Z = Z
 
         #initialize variational parameters
@@ -55,10 +59,10 @@ class MOGP(CollapsedMixture):
             # get mean and variance of each GP at the obseved points. the
             # different mean and variances for the clusters are stored in the
             # columns.
-            mu, var = conditionals.conditional(Xi, self.Z, self.kern, self.q_mu,
+            mu, var = GPflow.conditionals.conditional(Xi, self.Z, self.kern, self.q_mu,
                                                q_sqrt=self.q_sqrt, full_cov=False, whiten=False)
 
-            # duplicate columns of Y so that we can compute likeluihoods for all clusters in one go.
+            # duplicate columns of Y so that we can compute likelihoods for all clusters in one go.
             Ystacked = tf.tile(Yi, [1, self.num_clusters])
 
             # Get variational expectations.
@@ -72,12 +76,12 @@ class MOGP(CollapsedMixture):
 
     @GPflow.param.AutoFlow((tf.float64, [None, None]))
     def predict_f(self, Xnew):
-        return conditionals.conditional(Xi, self.Z, self.kern, self.q_mu,
+        return GPflow.conditionals.conditional(Xi, self.Z, self.kern, self.q_mu,
                                         q_sqrt=self.q_sqrt, full_cov=False, whiten=False)
 
     @GPflow.param.AutoFlow((tf.float64, [None, None]))
     def predict_y(self, Xnew):
-        mu, var = conditionals.conditional(Xi, self.Z, self.kern, self.q_mu,
+        mu, var = GPflow.conditionals.conditional(Xi, self.Z, self.kern, self.q_mu,
                                            q_sqrt=self.q_sqrt, full_cov=False, whiten=False)
         return self.likelihood.predict_mean_and_var(mu, var)
 
