@@ -47,7 +47,7 @@ def tensor_lngammad(v, D):
 def softmax(X):
     phi = tf.nn.softmax(X, name='phi')
     log_phi = tf.nn.log_softmax(X, name='log_phi')
-    H = -tf.reduce_sum(tf.mul(phi, log_phi), name='H')
+    H = -tf.reduce_sum(tf.multiply(phi, log_phi), name='H')
     return phi, log_phi, H
 
 

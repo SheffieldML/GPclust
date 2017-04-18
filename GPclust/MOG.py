@@ -58,7 +58,7 @@ class MOG(CollapsedMixture):
         # computations needed for bound, gradient and predictions
         kNs = phi_hat + self.k0
         vNs = phi_hat + self.v0
-        Xsumk = tf.matmul(tf.transpose(phi), self.X)  # K x D
+        Xsumk = tf.matmultiply(tf.transpose(phi), self.X)  # K x D
         Ck = tf.reduce_sum(tf.expand_dims(tf.expand_dims(tf.transpose(phi), 2), 2)
                            * tf.expand_dims(self.XXT, 0), 1)  # K x D x D
         mun = (self.k0 * tf.reshape(self.m0, [1, -1]) + Xsumk) / tf.reshape(kNs, [-1, 1])  # K x D
@@ -92,8 +92,8 @@ class MOG(CollapsedMixture):
 
         Dist = tf.sub(tf.expand_dims(Xnew, 1), tf.expand_dims(mun, 0))  # Nnew x K x D
         h = tf.tile(tf.expand_dims(Sns_invs, 0), tf.pack([tf.shape(Dist)[0], 1, 1, 1]))
-        tmp = tf.reduce_sum(tf.mul(tf.expand_dims(Dist, 3), h), 2) # N x K x D
-        mahalanobis = tf.reduce_sum(tf.mul(tmp, Dist), 2)/(kNs+1.)*kNs*(vNs-self.D+1.) # N x K
+        tmp = tf.reduce_sum(tf.multiply(tf.expand_dims(Dist, 3), h), 2) # N x K x D
+        mahalanobis = tf.reduce_sum(tf.multiply(tmp, Dist), 2)/(kNs+1.)*kNs*(vNs-self.D+1.) # N x K
         halflndetSigma = 0.5*(Sns_logdet + self.D*tf.log((kNs+1.)/(kNs*(vNs-self.D+1.))))
         Z = tf.lgamma(0.5*(tf.expand_dims(vNs, 0)+1.))-tf.lgamma(0.5*(tf.expand_dims(vNs, 0)-self.D+1.))\
             - (0.5*self.D)*(tf.log(tf.expand_dims(vNs, 0)-self.D+1.) + self.LOGPI)\
@@ -119,7 +119,7 @@ class MOG(CollapsedMixture):
         phi_hat = tf.reduce_sum(phi, 0)
         pie = tf.add(phi_hat, self.alpha)
         pie = tf.div(pie, tf.reduce_sum(pie))
-        return tf.reduce_sum(tf.mul(Z, tf.expand_dims(pie, 0)), 1)
+        return tf.reduce_sum(tf.multiply(Z, tf.expand_dims(pie, 0)), 1)
 
     #@GPflow.param.AutoFlow((tf.float64), (tf.float64))
     @GPflow.param.AutoFlow()
@@ -131,7 +131,7 @@ class MOG(CollapsedMixture):
 
         # computations needed for bound, gradient and predictions
         kNs = phi_hat + self.k0
-        Xsumk = tf.matmul(tf.transpose(phi), self.X)  # K x D
+        Xsumk = tf.matmultiply(tf.transpose(phi), self.X)  # K x D
         Ck = tf.reduce_sum(tf.expand_dims(tf.expand_dims(tf.transpose(phi), 2), 2)
                            * tf.expand_dims(self.XXT, 0), 1)  # K x D x D
         mun = (self.k0 * tf.reshape(self.m0, [1, -1]) + Xsumk) / tf.reshape(kNs, [-1, 1])  # K x D

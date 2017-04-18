@@ -25,7 +25,7 @@ class MOGP(CollapsedMixture):
     name     - A convenient string for printing the model (default MOHGP)
 
     """
-    def __init__(self, X, Y, Z=None, kern=None, likelihood=None, num_clusters=2, alpha=1., prior_Z='symmetric'):
+    def __init__(self, X, Y, Z=None, kernF=None, likelihood=None, num_clusters=2, alpha=1., prior_Z='symmetric'):
 
         assert len(X) == len(Y)
         for x, y in zip(X, Y):
@@ -35,7 +35,7 @@ class MOGP(CollapsedMixture):
 
         CollapsedMixture.__init__(self, num_data, num_clusters, prior_Z, alpha)
 
-        self.kern = kern
+        self.kern = kernF
         self.likelihood = likelihood
         if Z is None:
             # Choose 10 inducing points across the range of X
@@ -55,6 +55,7 @@ class MOGP(CollapsedMixture):
     def build_likelihood(self):
         loglik = 0.
         phi = tf.nn.softmax(self.logphi)
+        temp = []
         for i, (Xi, Yi) in enumerate(zip(self.X, self.Y)):
             # get mean and variance of each GP at the obseved points. the
             # different mean and variances for the clusters are stored in the
@@ -66,9 +67,9 @@ class MOGP(CollapsedMixture):
             Ystacked = tf.tile(Yi, [1, self.num_clusters])
 
             # Get variational expectations.
-            var_exp = self.likelihood.variational_expectations(fmean, fvar, Ystacked)
-
+            var_exp = self.likelihood.variational_expectations(mu, var, Ystacked)
             phi_i = phi[i]
+            temp.append(tf.reduce_sum(phi_i * tf.reduce_sum(var_exp, 0)))
             loglik += tf.reduce_sum(phi_i * tf.reduce_sum(var_exp, 0))
 
         KL_u = GPflow.kullback_leiblers.gauss_kl(self.q_mu, self.q_sqrt, self.kern.K(self.Z))
@@ -84,9 +85,6 @@ class MOGP(CollapsedMixture):
         mu, var = GPflow.conditionals.conditional(Xi, self.Z, self.kern, self.q_mu,
                                            q_sqrt=self.q_sqrt, full_cov=False, whiten=False)
         return self.likelihood.predict_mean_and_var(mu, var)
-
-
-
 
 
     @GPflow.param.AutoFlow((tf.float64, [None, None]))

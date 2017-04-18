@@ -57,7 +57,7 @@ class OMGP(CollapsedMixture):
             GP_bound -= 0.5 * Blogdet
 
             # Constant, weighted by  model assignment per point
-            GP_bound -= 0.5*self.D*tf.reduce_sum(tf.mul(phi[:, i],tf.log(self.TWOPI*self.noise_variance)))
+            GP_bound -= 0.5*self.D*tf.reduce_sum(tf.multiply(phi[:, i],tf.log(self.TWOPI*self.noise_variance)))
 
         return GP_bound - self.build_KL_Z()
 

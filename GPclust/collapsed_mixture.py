@@ -55,7 +55,7 @@ class CollapsedMixture(CollapsedVB):
         """
         phi = tf.nn.softmax(self.logphi)
         phi_hat = tf.reduce_sum(phi, 0)
-        entropy = -tf.reduce_sum(tf.mul(phi,tf.nn.log_softmax(self.logphi)))
+        entropy = -tf.reduce_sum(tf.multiply(phi,tf.nn.log_softmax(self.logphi)))
         if self.prior_Z == 'symmetric':
             return -ln_dirichlet_C(np.ones(self.num_clusters) * self.alpha)\
                 + ln_dirichlet_C(self.alpha + phi_hat)\
