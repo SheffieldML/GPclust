@@ -52,9 +52,9 @@ class MOHGP(CollapsedMixture):
         Sf = self.kernF.K(self.X)
         Sy = self.kernY.K(self.X)
 
-        Sy_chol = tf.cholesky(Sy + GPflow.tf_wraps.eye(self.D) * 1e-6)
+        Sy_chol = tf.cholesky(Sy + tf.eye(self.D) * 1e-6)
         Sy_logdet = 2.*tf.reduce_sum(tf.log(tf.diag_part(Sy_chol)))
-        tmp = tf.matrix_triangular_solve(Sy_chol, GPflow.tf_wraps.eye(self.D), lower=True)
+        tmp = tf.matrix_triangular_solve(Sy_chol, tf.eye(self.D), lower=True)
         Sy_inv = tf.matrix_triangular_solve(tf.transpose(Sy_chol), tmp, lower=False)
 
         phi = tf.nn.softmax(self.logphi)
@@ -65,8 +65,8 @@ class MOHGP(CollapsedMixture):
         tmp1 = tf.matrix_triangular_solve(Sy_chol, Sf, lower=True)
         tmp = tf.matrix_triangular_solve(Sy_chol, tf.transpose(tmp1), lower=True)
 
-        Cs = tf.expand_dims(GPflow.tf_wraps.eye(self.D), 0) + tf.expand_dims(tmp, 0) * tf.reshape(phi_hat, tile_shape)
-        C_chols = tf.cholesky(Cs + tf.expand_dims(GPflow.tf_wraps.eye(self.D), 0) * 1e-6)
+        Cs = tf.expand_dims(tf.eye(self.D), 0) + tf.expand_dims(tmp, 0) * tf.reshape(phi_hat, tile_shape)
+        C_chols = tf.cholesky(Cs + tf.expand_dims(tf.eye(self.D), 0) * 1e-6)
         log_det_diff_sum = 2 * tf.reduce_sum(tf.log(tf.matrix_diag_part(C_chols)))
 
         L_tiled = tf.tile(tf.expand_dims(tf.transpose(Sy_chol), 0), tile_shape)
@@ -93,8 +93,8 @@ class MOHGP(CollapsedMixture):
         Sf_tiled = tf.tile(tf.expand_dims(Sf, 0), tile_shape)
 
         Sy = self.kernY.K(self.X)
-        Sy_chol = tf.cholesky(Sy + GPflow.tf_wraps.eye(self.D) * 1e-6)
-        Sy_chol_inv = tf.matrix_triangular_solve(Sy_chol, GPflow.tf_wraps.eye(self.D), lower=True)
+        Sy_chol = tf.cholesky(Sy + tf.eye(self.D) * 1e-6)
+        Sy_chol_inv = tf.matrix_triangular_solve(Sy_chol, tf.eye(self.D), lower=True)
         Sy_inv = tf.matrix_triangular_solve(tf.transpose(Sy_chol), Sy_chol_inv, lower=False)
         Sy_chol_inv_tiled = tf.tile(tf.expand_dims(Sy_chol_inv, 0), tile_shape)
         Sy_inv_tiled = tf.tile(tf.expand_dims(Sy_inv, 0), tile_shape)
@@ -106,9 +106,9 @@ class MOHGP(CollapsedMixture):
 
         tmp1 = tf.matrix_triangular_solve(Sy_chol, Sf, lower=True)
         tmp = tf.matrix_triangular_solve(Sy_chol, tf.transpose(tmp1), lower=True)
-        Cs = tf.expand_dims(GPflow.tf_wraps.eye(self.D), 0) + tf.expand_dims(tmp, 0) * tf.reshape(phi_hat, tile_shape)
+        Cs = tf.expand_dims(tf.eye(self.D), 0) + tf.expand_dims(tmp, 0) * tf.reshape(phi_hat, tile_shape)
 
-        C_chols = tf.cholesky(Cs + tf.expand_dims(GPflow.tf_wraps.eye(self.D), 0) * 1e-6)
+        C_chols = tf.cholesky(Cs + tf.expand_dims(tf.eye(self.D), 0) * 1e-6)
 
         tmp = tf.matrix_triangular_solve(C_chols, Sy_chol_inv_tiled, lower=True)
         B_invs = tf.matmul(tf.matrix_transpose(tmp), tmp) * tf.reshape(phi_hat, tile_shape)
@@ -117,7 +117,7 @@ class MOHGP(CollapsedMixture):
         kx_tiled = tf.tile(tf.expand_dims(kx, 0), tile_shape)
         kxx = self.kernF.K(Xnew) + self.kernY.K(Xnew)
 
-        tmp = tf.expand_dims(GPflow.tf_wraps.eye(self.D), 0) - tf.matmul(B_invs, Sf_tiled)
+        tmp = tf.expand_dims(tf.eye(self.D), 0) - tf.matmul(B_invs, Sf_tiled)
 
         tmp = tf.matmul(tf.matrix_transpose(kx_tiled), tmp)
         tmp = tf.matmul(tmp, Sy_inv_tiled)

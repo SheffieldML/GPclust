@@ -84,7 +84,7 @@ class MOG(CollapsedMixture):
         """
         kNs, vNs, mun, Sns_chol = self.get_components()
 
-        RHS = tf.reshape(tf.tile(GPflow.tf_wraps.eye(self.D),tf.stack([tf.shape(Sns_chol)[0],1])),\
+        RHS = tf.reshape(tf.tile(tf.eye(self.D),tf.stack([tf.shape(Sns_chol)[0],1])),\
             tf.stack([tf.shape(Sns_chol)[0],self.D,self.D]))
         Sns_invs = tf.cholesky_solve(Sns_chol,RHS) # Is there a better way to do this?
         Sns_logdet = 2 * tf.reduce_sum(tf.log(tf.matrix_diag_part(Sns_chol)), 1)

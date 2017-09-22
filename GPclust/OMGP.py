@@ -49,7 +49,7 @@ class OMGP(CollapsedMixture):
             B_inv = tf.diag(1. / ((phi[:, i] + 1e-6) / self.noise_variance))
 
             # Make more stable using cholesky factorization:
-            LB = tf.cholesky(K + B_inv + GPflow.tf_wraps.eye(self.num_data) * 1e-6)
+            LB = tf.cholesky(K + B_inv + tf.eye(self.num_data) * 1e-6)
             Blogdet = 2.*tf.reduce_sum(tf.log(tf.diag_part(LB)))
             # Data fit
             GP_bound -= 0.5 * tf.trace(tf.cholesky_solve(LB, self.YYT))
@@ -71,12 +71,12 @@ class OMGP(CollapsedMixture):
         K = kern.K(self.X)
         kx = kern.K(self.X, Xnew)
 
-        # Notation is from pages 3-5 of M. Lazaro-Gredilla et al. / Overlapping Mixtures of 
+        # Notation is from pages 3-5 of M. Lazaro-Gredilla et al. / Overlapping Mixtures of
         #Gaussian Processes for the data association problem (used original equations - not
         # "stable" ones)
         # Predict mean
         B_inv = tf.diag(1. / ((phi[:, i] + 1e-6) / self.noise_variance))
-        LB = tf.cholesky(K + B_inv + GPflow.tf_wraps.eye(self.num_data)*1e-6)
+        LB = tf.cholesky(K + B_inv + tf.eye(self.num_data)*1e-6)
         mu = tf.matmul(tf.transpose(kx), tf.cholesky_solve(LB, self.Y))
 
         # Predict variance
