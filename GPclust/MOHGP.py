@@ -47,7 +47,7 @@ class MOHGP(CollapsedMixture):
 
     def build_likelihood(self):
 
-        tile_shape = tf.pack([tf.shape(self.logphi)[1], 1, 1])
+        tile_shape = tf.stack([tf.shape(self.logphi)[1], 1, 1])
 
         Sf = self.kernF.K(self.X)
         Sy = self.kernY.K(self.X)
@@ -87,7 +87,7 @@ class MOHGP(CollapsedMixture):
     @GPflow.param.AutoFlow((tf.float64, [None, None]))
     def predict_components(self, Xnew):
         """The predictive density under each component"""
-        tile_shape = tf.pack([tf.shape(self.logphi)[1], 1, 1])
+        tile_shape = tf.stack([tf.shape(self.logphi)[1], 1, 1])
 
         Sf = self.kernF.K(self.X)
         Sf_tiled = tf.tile(tf.expand_dims(Sf, 0), tile_shape)

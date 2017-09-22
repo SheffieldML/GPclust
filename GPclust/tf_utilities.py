@@ -18,14 +18,14 @@ def tf_multiple_pdinv(A):
     D = s[0]
     N = s[2]
     # Reshape A so tensorflow can deal with it
-    A = tf.reshape(tf.transpose(tf.reshape(A,tf.pack([D*D,N]))),tf.pack([N,D,D]))
+    A = tf.reshape(tf.transpose(tf.reshape(A,tf.stack([D*D,N]))),tf.stack([N,D,D]))
 
     chols = tf.batch_cholesky(A + tf.expand_dims(GPflow.tf_wraps.eye(D), 0) * 1e-6)
     #RHS = N copies of eye(D), so it is [N,D,D]
-    RHS = tf.reshape(tf.tile(GPflow.tf_wraps.eye(D),tf.pack([N,1])),tf.pack([N,D,D]))
+    RHS = tf.reshape(tf.tile(GPflow.tf_wraps.eye(D),tf.stack([N,1])),tf.stack([N,D,D]))
     invs = tf.batch_cholesky_solve(chols,RHS)
     #Reshape back to original
-    invs = tf.reshape(tf.transpose(tf.reshape(invs,tf.pack([N,D*D]))),tf.pack([D,D,N]))
+    invs = tf.reshape(tf.transpose(tf.reshape(invs,tf.stack([N,D*D]))),tf.stack([D,D,N]))
     hld = tf.reduce_sum(tf.log(tf.batch_matrix_diag_part(chols)),1)
     return invs, hld
 
@@ -39,8 +39,8 @@ def tensor_lngammad(v, D):
     N = tf.shape(v)[0]
 
     w = tf.linspace(tf.to_double(1.), tf.cast(D, tf.float64),D)
-    z = tf.tile(tf.expand_dims(w,1),tf.pack([1,N]))
-    z = tf.reshape(z,tf.pack([D,N]))
+    z = tf.tile(tf.expand_dims(w,1),tf.stack([1,N]))
+    z = tf.reshape(z,tf.stack([D,N]))
     lgd = tf.reduce_sum(tf.lgamma(0.5*(v + 1.0 - z)),0)
     return lgd
 

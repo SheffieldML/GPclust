@@ -84,14 +84,14 @@ class MOG(CollapsedMixture):
         """
         kNs, vNs, mun, Sns_chol = self.get_components()
 
-        RHS = tf.reshape(tf.tile(GPflow.tf_wraps.eye(self.D),tf.pack([tf.shape(Sns_chol)[0],1])),\
-            tf.pack([tf.shape(Sns_chol)[0],self.D,self.D]))
+        RHS = tf.reshape(tf.tile(GPflow.tf_wraps.eye(self.D),tf.stack([tf.shape(Sns_chol)[0],1])),\
+            tf.stack([tf.shape(Sns_chol)[0],self.D,self.D]))
         Sns_invs = tf.cholesky_solve(Sns_chol,RHS) # Is there a better way to do this?
         Sns_logdet = 2 * tf.reduce_sum(tf.log(tf.matrix_diag_part(Sns_chol)), 1)
 
 
         Dist = tf.sub(tf.expand_dims(Xnew, 1), tf.expand_dims(mun, 0))  # Nnew x K x D
-        h = tf.tile(tf.expand_dims(Sns_invs, 0), tf.pack([tf.shape(Dist)[0], 1, 1, 1]))
+        h = tf.tile(tf.expand_dims(Sns_invs, 0), tf.stack([tf.shape(Dist)[0], 1, 1, 1]))
         tmp = tf.reduce_sum(tf.multiply(tf.expand_dims(Dist, 3), h), 2) # N x K x D
         mahalanobis = tf.reduce_sum(tf.multiply(tmp, Dist), 2)/(kNs+1.)*kNs*(vNs-self.D+1.) # N x K
         halflndetSigma = 0.5*(Sns_logdet + self.D*tf.log((kNs+1.)/(kNs*(vNs-self.D+1.))))

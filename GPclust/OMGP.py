@@ -99,7 +99,7 @@ class OMGP(CollapsedMixture):
             mus.append(mu)
             vas.append(va)
 
-        return tf.transpose(tf.squeeze(tf.pack(mus),[2])), tf.transpose(tf.pack(vas))
+        return tf.transpose(tf.squeeze(tf.stack(mus),[2])), tf.transpose(tf.stack(vas))
 
 
     @GPflow.param.AutoFlow((tf.float64, [None, None]))
