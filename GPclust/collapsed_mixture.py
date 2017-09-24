@@ -67,7 +67,7 @@ class CollapsedMixture(CollapsedVB):
             A = tf.lgamma(1. + phi_hat)
             B = tf.lgamma(alpha + phi_tilde)
             C = tf.lgamma(alpha + 1. + phi_tilde_plus_hat)
-            D = tf.to_double(self.num_clusters)*tf.sub(tf.lgamma(1. + alpha),tf.lgamma(alpha))
+            D = tf.to_double(self.num_clusters)*(tf.lgamma(1. + alpha)-tf.lgamma(alpha))
             return -tf.reduce_sum(A)\
                 - tf.reduce_sum(B)\
                 + tf.reduce_sum(C)\

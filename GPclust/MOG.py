@@ -59,7 +59,7 @@ class MOG(CollapsedMixture):
         # computations needed for bound, gradient and predictions
         kNs = phi_hat + self.k0
         vNs = phi_hat + self.v0
-        Xsumk = tf.matmultiply(tf.transpose(phi), self.X)  # K x D
+        Xsumk = tf.matmul(tf.transpose(phi), self.X)  # K x D
         Ck = tf.reduce_sum(tf.expand_dims(tf.expand_dims(tf.transpose(phi), 2), 2)
                            * tf.expand_dims(self.XXT, 0), 1)  # K x D x D
         mun = (self.k0 * tf.reshape(self.m0, [1, -1]) + Xsumk) / tf.reshape(kNs, [-1, 1])  # K x D
@@ -91,7 +91,7 @@ class MOG(CollapsedMixture):
         Sns_logdet = 2 * tf.reduce_sum(tf.log(tf.matrix_diag_part(Sns_chol)), 1)
 
 
-        Dist = tf.sub(tf.expand_dims(Xnew, 1), tf.expand_dims(mun, 0))  # Nnew x K x D
+        Dist = tf.expand_dims(Xnew, 1) - tf.expand_dims(mun, 0)  # Nnew x K x D
         h = tf.tile(tf.expand_dims(Sns_invs, 0), tf.stack([tf.shape(Dist)[0], 1, 1, 1]))
         tmp = tf.reduce_sum(tf.multiply(tf.expand_dims(Dist, 3), h), 2) # N x K x D
         mahalanobis = tf.reduce_sum(tf.multiply(tmp, Dist), 2)/(kNs+1.)*kNs*(vNs-self.D+1.) # N x K
@@ -132,7 +132,7 @@ class MOG(CollapsedMixture):
 
         # computations needed for bound, gradient and predictions
         kNs = phi_hat + self.k0
-        Xsumk = tf.matmultiply(tf.transpose(phi), self.X)  # K x D
+        Xsumk = tf.matmul(tf.transpose(phi), self.X)  # K x D
         Ck = tf.reduce_sum(tf.expand_dims(tf.expand_dims(tf.transpose(phi), 2), 2)
                            * tf.expand_dims(self.XXT, 0), 1)  # K x D x D
         mun = (self.k0 * tf.reshape(self.m0, [1, -1]) + Xsumk) / tf.reshape(kNs, [-1, 1])  # K x D
