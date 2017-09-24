@@ -54,25 +54,19 @@ class CollapsedMixture(CollapsedVB):
         This function returns a tensorflow expression to be used inside build_likelihood
         """
         phi = tf.nn.softmax(self.logphi)
-        phi_hat = tf.reduce_sum(phi, 0)
+        phi_hat = tf.reduce_sum(phi, axis=0)
         entropy = -tf.reduce_sum(tf.multiply(phi,tf.nn.log_softmax(self.logphi)))
         if self.prior_Z == 'symmetric':
-            return -ln_dirichlet_C(np.ones(self.num_clusters) * self.alpha)\
-                + ln_dirichlet_C(self.alpha + phi_hat)\
-                - entropy
+            return -ln_dirichlet_C(np.ones(self.num_clusters) * self.alpha) + ln_dirichlet_C(self.alpha + phi_hat) - entropy
         elif self.prior_Z == 'DP':
             alpha = tf.to_double(self.alpha)
-            phi_tilde_plus_hat = tf.reverse(tf.cumsum(tf.reverse(phi_hat,[True])), [True])
+            phi_tilde_plus_hat = tf.cumsum(phi_hat,reverse=True)
             phi_tilde = phi_tilde_plus_hat - phi_hat
             A = tf.lgamma(1. + phi_hat)
             B = tf.lgamma(alpha + phi_tilde)
             C = tf.lgamma(alpha + 1. + phi_tilde_plus_hat)
             D = tf.to_double(self.num_clusters)*(tf.lgamma(1. + alpha)-tf.lgamma(alpha))
-            return -tf.reduce_sum(A)\
-                - tf.reduce_sum(B)\
-                + tf.reduce_sum(C)\
-                - D\
-                - entropy
+            return -tf.reduce_sum(A) - tf.reduce_sum(B) + tf.reduce_sum(C) - D - entropy
         else:
             raise NotImplementedError("invalid mixing proportion prior type: %s" % self.prior_Z)
 

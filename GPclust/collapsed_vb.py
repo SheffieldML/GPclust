@@ -25,7 +25,7 @@ class CollapsedVB(gpflow.model.Model):
     """
 
     def __init__(self):
-        """"""
+        """ """
         gpflow.model.Model.__init__(self)
 
         # settings for optimizing hyper parameters
