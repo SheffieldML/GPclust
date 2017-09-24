@@ -4,7 +4,7 @@ from __future__ import print_function, absolute_import
 
 import numpy as np
 import tensorflow as tf
-import GPflow
+import gpflow
 from .tf_utilities import ln_dirichlet_C
 from .collapsed_vb import CollapsedVB
 
@@ -36,7 +36,7 @@ class CollapsedMixture(CollapsedVB):
         self.alpha = alpha
 
         # hold the variational parameters in a DataHolder
-        self.logphi = GPflow.param.DataHolder(np.random.randn(self.num_data, self.num_clusters), on_shape_change='pass')
+        self.logphi = gpflow.param.DataHolder(np.random.randn(self.num_data, self.num_clusters), on_shape_change='pass')
 
     def set_vb_param(self, logphi):
         """
@@ -76,17 +76,17 @@ class CollapsedMixture(CollapsedVB):
         else:
             raise NotImplementedError("invalid mixing proportion prior type: %s" % self.prior_Z)
 
-    @GPflow.param.AutoFlow()
+    @gpflow.param.AutoFlow()
     def get_phihat(self):
         phi = tf.nn.softmax(self.logphi)
         phi_hat = tf.reduce_sum(phi, 0)
         return phi_hat
 
-    @GPflow.param.AutoFlow()
+    @gpflow.param.AutoFlow()
     def log_likelihood(self):
         return self.build_likelihood()
 
-    @GPflow.param.AutoFlow()
+    @gpflow.param.AutoFlow()
     def get_phi(self):
         phi = tf.nn.softmax(self.logphi)
         return phi
@@ -94,7 +94,7 @@ class CollapsedMixture(CollapsedVB):
     def bound(self):
         return self.compute_log_likelihood()
 
-    @GPflow.param.AutoFlow()
+    @gpflow.param.AutoFlow()
     def vb_bound_grad_natgrad(self):
         """
         Natural Gradients of the bound with respect to the variational

@@ -1,6 +1,8 @@
 import numpy as np
 import tensorflow as tf
-import GPflow
+import gpflow
+from gpflow._settings import settings
+float_type = settings.dtypes.float_type
 
 def tf_multiple_pdinv(A):
     """
@@ -20,9 +22,9 @@ def tf_multiple_pdinv(A):
     # Reshape A so tensorflow can deal with it
     A = tf.reshape(tf.transpose(tf.reshape(A,tf.stack([D*D,N]))),tf.stack([N,D,D]))
 
-    chols = tf.batch_cholesky(A + tf.expand_dims(tf.eye(D), 0) * 1e-6)
+    chols = tf.batch_cholesky(A + tf.expand_dims(tf.eye(D,dtype=float_type), 0) * 1e-6)
     #RHS = N copies of eye(D), so it is [N,D,D]
-    RHS = tf.reshape(tf.tile(tf.eye(D),tf.stack([N,1])),tf.stack([N,D,D]))
+    RHS = tf.reshape(tf.tile(tf.eye(D,dtype=float_type),tf.stack([N,1])),tf.stack([N,D,D]))
     invs = tf.batch_cholesky_solve(chols,RHS)
     #Reshape back to original
     invs = tf.reshape(tf.transpose(tf.reshape(invs,tf.stack([N,D*D]))),tf.stack([D,D,N]))

@@ -2,7 +2,7 @@
 # Licensed under the GPL v3 (see LICENSE.txt)
 
 import numpy as np
-import GPflow
+import gpflow
 import sys  # for flushing
 from numpy.linalg.linalg import LinAlgError
 
@@ -11,9 +11,9 @@ class LinAlgWarning(Warning):
     pass
 
 
-class CollapsedVB(GPflow.model.Model):
+class CollapsedVB(gpflow.model.Model):
     """
-    A base class for collapsed variational models, using the GPflow framework for
+    A base class for collapsed variational models, using the gpflow framework for
     non-variational parameters.
 
     Optimisation of the (collapsed) variational parameters is performed by
@@ -26,7 +26,7 @@ class CollapsedVB(GPflow.model.Model):
 
     def __init__(self):
         """"""
-        GPflow.model.Model.__init__(self)
+        gpflow.model.Model.__init__(self)
 
         # settings for optimizing hyper parameters
         self.hyperparam_interval = 50
@@ -174,7 +174,7 @@ class CollapsedVB(GPflow.model.Model):
         """
         if self.get_free_state().size > 0:
             start = self.compute_log_likelihood()
-            GPflow.model.Model.optimize(self, **self.hyperparam_opt_args)
+            gpflow.model.Model.optimize(self, **self.hyperparam_opt_args)
             return self.compute_log_likelihood() - start
         else:
             return 0.

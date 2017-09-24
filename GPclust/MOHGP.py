@@ -3,9 +3,11 @@
 
 import numpy as np
 from .collapsed_mixture import CollapsedMixture
-import GPflow
+import gpflow
 import tensorflow as tf
 
+from gpflow._settings import settings
+float_type = settings.dtypes.float_type
 
 class MOHGP(CollapsedMixture):
     """
@@ -20,8 +22,8 @@ class MOHGP(CollapsedMixture):
     X        - The times of observation of the time series in a (Tx1) np.array
     Y        - A np.array of the observed time-course values: each row contains
                a time series, each column represents a unique time point
-    kernF    - A GPflow kernel to model the mean function of each cluster
-    kernY    - A GPflow kernel to model the deviation of each of the time courses
+    kernF    - A gpflow kernel to model the mean function of each cluster
+    kernY    - A gpflow kernel to model the deviation of each of the time courses
                from the mean of the cluster
     alpha    - The a priori Dirichlet concentrationn parameter (default 1.)
     prior_Z  - Either 'symmetric' or 'dp', specifies whether to use a symmetric Dirichlet
@@ -32,8 +34,8 @@ class MOHGP(CollapsedMixture):
     def __init__(self, X, kernF, kernY, Y, num_clusters=2, alpha=1., prior_Z='symmetric'):
 
         num_data, self.D = Y.shape
-        self.Y = GPflow.param.DataHolder(Y, on_shape_change='raise')
-        self.X = GPflow.param.DataHolder(X, on_shape_change='pass')
+        self.Y = gpflow.param.DataHolder(Y, on_shape_change='raise')
+        self.X = gpflow.param.DataHolder(X, on_shape_change='pass')
         #assert X.shape[1] == self.D, "input data don't match observations"
 
         CollapsedMixture.__init__(self, num_data, num_clusters, prior_Z, alpha)
@@ -42,8 +44,8 @@ class MOHGP(CollapsedMixture):
         self.kernY = kernY
         self.LOG2PI = np.log(2.*np.pi)
 
-        # Computations that can be done outside the optimisation loop
-        self.YTY = GPflow.param.DataHolder(np.dot(Y.T, Y))
+        # Computations that can be done outside the optimization loop
+        self.YTY = gpflow.param.DataHolder(np.dot(Y.T, Y))
 
     def build_likelihood(self):
 
@@ -52,9 +54,9 @@ class MOHGP(CollapsedMixture):
         Sf = self.kernF.K(self.X)
         Sy = self.kernY.K(self.X)
 
-        Sy_chol = tf.cholesky(Sy + tf.eye(self.D) * 1e-6)
+        Sy_chol = tf.cholesky(Sy + tf.eye(self.D,dtype=float_type) * 1e-6)
         Sy_logdet = 2.*tf.reduce_sum(tf.log(tf.diag_part(Sy_chol)))
-        tmp = tf.matrix_triangular_solve(Sy_chol, tf.eye(self.D), lower=True)
+        tmp = tf.matrix_triangular_solve(Sy_chol, tf.eye(self.D,dtype=float_type), lower=True)
         Sy_inv = tf.matrix_triangular_solve(tf.transpose(Sy_chol), tmp, lower=False)
 
         phi = tf.nn.softmax(self.logphi)
@@ -65,8 +67,8 @@ class MOHGP(CollapsedMixture):
         tmp1 = tf.matrix_triangular_solve(Sy_chol, Sf, lower=True)
         tmp = tf.matrix_triangular_solve(Sy_chol, tf.transpose(tmp1), lower=True)
 
-        Cs = tf.expand_dims(tf.eye(self.D), 0) + tf.expand_dims(tmp, 0) * tf.reshape(phi_hat, tile_shape)
-        C_chols = tf.cholesky(Cs + tf.expand_dims(tf.eye(self.D), 0) * 1e-6)
+        Cs = tf.expand_dims(tf.eye(self.D,dtype=float_type), 0) + tf.expand_dims(tmp, 0) * tf.reshape(phi_hat, tile_shape)
+        C_chols = tf.cholesky(Cs + tf.expand_dims(tf.eye(self.D,dtype=float_type), 0) * 1e-6)
         log_det_diff_sum = 2 * tf.reduce_sum(tf.log(tf.matrix_diag_part(C_chols)))
 
         L_tiled = tf.tile(tf.expand_dims(tf.transpose(Sy_chol), 0), tile_shape)
@@ -84,7 +86,7 @@ class MOHGP(CollapsedMixture):
                        tf.reduce_sum(Syi_ybarkybarkT_Syi * Lambda_inv))\
             - self.build_KL_Z()
 
-    @GPflow.param.AutoFlow((tf.float64, [None, None]))
+    @gpflow.param.AutoFlow((tf.float64, [None, None]))
     def predict_components(self, Xnew):
         """The predictive density under each component"""
         tile_shape = tf.stack([tf.shape(self.logphi)[1], 1, 1])
@@ -93,8 +95,8 @@ class MOHGP(CollapsedMixture):
         Sf_tiled = tf.tile(tf.expand_dims(Sf, 0), tile_shape)
 
         Sy = self.kernY.K(self.X)
-        Sy_chol = tf.cholesky(Sy + tf.eye(self.D) * 1e-6)
-        Sy_chol_inv = tf.matrix_triangular_solve(Sy_chol, tf.eye(self.D), lower=True)
+        Sy_chol = tf.cholesky(Sy + tf.eye(self.D,dtype=float_type) * 1e-6)
+        Sy_chol_inv = tf.matrix_triangular_solve(Sy_chol, tf.eye(self.D,dtype=float_type), lower=True)
         Sy_inv = tf.matrix_triangular_solve(tf.transpose(Sy_chol), Sy_chol_inv, lower=False)
         Sy_chol_inv_tiled = tf.tile(tf.expand_dims(Sy_chol_inv, 0), tile_shape)
         Sy_inv_tiled = tf.tile(tf.expand_dims(Sy_inv, 0), tile_shape)
@@ -106,9 +108,9 @@ class MOHGP(CollapsedMixture):
 
         tmp1 = tf.matrix_triangular_solve(Sy_chol, Sf, lower=True)
         tmp = tf.matrix_triangular_solve(Sy_chol, tf.transpose(tmp1), lower=True)
-        Cs = tf.expand_dims(tf.eye(self.D), 0) + tf.expand_dims(tmp, 0) * tf.reshape(phi_hat, tile_shape)
+        Cs = tf.expand_dims(tf.eye(self.D,dtype=float_type), 0) + tf.expand_dims(tmp, 0) * tf.reshape(phi_hat, tile_shape)
 
-        C_chols = tf.cholesky(Cs + tf.expand_dims(tf.eye(self.D), 0) * 1e-6)
+        C_chols = tf.cholesky(Cs + tf.expand_dims(tf.eye(self.D,dtype=float_type), 0) * 1e-6)
 
         tmp = tf.matrix_triangular_solve(C_chols, Sy_chol_inv_tiled, lower=True)
         B_invs = tf.matmul(tf.matrix_transpose(tmp), tmp) * tf.reshape(phi_hat, tile_shape)
@@ -117,7 +119,7 @@ class MOHGP(CollapsedMixture):
         kx_tiled = tf.tile(tf.expand_dims(kx, 0), tile_shape)
         kxx = self.kernF.K(Xnew) + self.kernY.K(Xnew)
 
-        tmp = tf.expand_dims(tf.eye(self.D), 0) - tf.matmul(B_invs, Sf_tiled)
+        tmp = tf.expand_dims(tf.eye(self.D,dtype=float_type), 0) - tf.matmul(B_invs, Sf_tiled)
 
         tmp = tf.matmul(tf.matrix_transpose(kx_tiled), tmp)
         tmp = tf.matmul(tmp, Sy_inv_tiled)

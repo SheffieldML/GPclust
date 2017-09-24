@@ -3,9 +3,10 @@
 
 import numpy as np
 from .collapsed_mixture import CollapsedMixture
-import GPflow
+import gpflow
 import tensorflow as tf
-
+from gpflow._settings import settings
+float_type = settings.dtypes.float_type
 
 class MOGP(CollapsedMixture):
     """
@@ -17,8 +18,8 @@ class MOGP(CollapsedMixture):
                entry in the list is a T_n x 1 array.
     Y        - the observed values at the times corresponding to X. A list of np.arrays.
     Z        - inducing point positions (M x 1 numpy array)
-    kernF    - A GPflow kernel to model the function associated with each cluster.
-    likelihood  - A GPflow Clikelihood object to represnt (potentially non-gaussian) obsevation distributions.
+    kernF    - A gpflow kernel to model the function associated with each cluster.
+    likelihood  - A gpflow Clikelihood object to represnt (potentially non-gaussian) obsevation distributions.
     alpha    - The a priori Dirichlet concentrationn parameter (default 1.)
     prior_Z  - Either 'symmetric' or 'dp', specifies whether to use a symmetric Dirichlet
                prior for the clusters, or a (truncated) Dirichlet Process.
@@ -45,9 +46,9 @@ class MOGP(CollapsedMixture):
 
         #initialize variational parameters
         M = Z.shape[0]
-        self.q_mu = GPflow.param.Param(np.random.randn(M, num_clusters))
+        self.q_mu = gpflow.param.Param(np.random.randn(M, num_clusters))
         q_sqrt = np.array([np.eye(M) for _ in range(num_clusters)]).swapaxes(0, 2)
-        self.q_sqrt = GPflow.param.Param(q_sqrt)
+        self.q_sqrt = gpflow.param.Param(q_sqrt)
 
 
         self.LOG2PI = np.log(2.*np.pi)
@@ -60,7 +61,7 @@ class MOGP(CollapsedMixture):
             # get mean and variance of each GP at the obseved points. the
             # different mean and variances for the clusters are stored in the
             # columns.
-            mu, var = GPflow.conditionals.conditional(Xi, self.Z, self.kern, self.q_mu,
+            mu, var = gpflow.conditionals.conditional(Xi, self.Z, self.kern, self.q_mu,
                                                q_sqrt=self.q_sqrt, full_cov=False, whiten=False)
 
             # duplicate columns of Y so that we can compute likelihoods for all clusters in one go.
@@ -72,22 +73,22 @@ class MOGP(CollapsedMixture):
             temp.append(tf.reduce_sum(phi_i * tf.reduce_sum(var_exp, 0)))
             loglik += tf.reduce_sum(phi_i * tf.reduce_sum(var_exp, 0))
 
-        KL_u = GPflow.kullback_leiblers.gauss_kl(self.q_mu, self.q_sqrt, self.kern.K(self.Z))
+        KL_u = gpflow.kullback_leiblers.gauss_kl(self.q_mu, self.q_sqrt, self.kern.K(self.Z))
         return loglik - KL_u - self.build_KL_Z()
 
-    @GPflow.param.AutoFlow((tf.float64, [None, None]))
+    @gpflow.param.AutoFlow((tf.float64, [None, None]))
     def predict_f(self, Xnew):
-        return GPflow.conditionals.conditional(Xi, self.Z, self.kern, self.q_mu,
+        return gpflow.conditionals.conditional(Xi, self.Z, self.kern, self.q_mu,
                                         q_sqrt=self.q_sqrt, full_cov=False, whiten=False)
 
-    @GPflow.param.AutoFlow((tf.float64, [None, None]))
+    @gpflow.param.AutoFlow((tf.float64, [None, None]))
     def predict_y(self, Xnew):
-        mu, var = GPflow.conditionals.conditional(Xi, self.Z, self.kern, self.q_mu,
+        mu, var = gpflow.conditionals.conditional(Xi, self.Z, self.kern, self.q_mu,
                                            q_sqrt=self.q_sqrt, full_cov=False, whiten=False)
         return self.likelihood.predict_mean_and_var(mu, var)
 
 
-    @GPflow.param.AutoFlow((tf.float64, [None, None]))
+    @gpflow.param.AutoFlow((tf.float64, [None, None]))
     def predict_components(self, Xnew):
 
         return mu, var

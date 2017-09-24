@@ -3,9 +3,10 @@
 
 import numpy as np
 from .collapsed_mixture import CollapsedMixture
-import GPflow
+import gpflow
 import tensorflow as tf
-
+from gpflow._settings import settings
+float_type = settings.dtypes.float_type
 
 class OMGP(CollapsedMixture):
     """
@@ -13,22 +14,22 @@ class OMGP(CollapsedMixture):
     """
     def __init__(self, X, Y, num_clusters=2, kernels=None, noise_variance=1., alpha=1., prior_Z='symmetric', name='OMGP'):
         num_data, self.D = Y.shape
-        self.Y = GPflow.param.DataHolder(Y, on_shape_change='raise')
-        self.X = GPflow.param.DataHolder(X, on_shape_change='pass')
+        self.Y = gpflow.param.DataHolder(Y, on_shape_change='raise')
+        self.X = gpflow.param.DataHolder(X, on_shape_change='pass')
         #assert X.shape[0] == self.D, "input data don't match observations"
 
         self.TWOPI = 2.0*np.pi
-        self.noise_variance = GPflow.param.Param(noise_variance, transform=GPflow.transforms.positive)
+        self.noise_variance = gpflow.param.Param(noise_variance, transform=gpflow.transforms.positive)
 
         CollapsedMixture.__init__(self, num_data, num_clusters, prior_Z, alpha)
 
         if kernels is None:
             kernels = []
             for i in range(self.num_clusters):
-                kernels.append(GPflow.kernels.RBF(input_dim=1))
-        self.kern = GPflow.param.ParamList(kernels)
+                kernels.append(gpflow.kernels.RBF(input_dim=1))
+        self.kern = gpflow.param.ParamList(kernels)
 
-        self.YYT = GPflow.param.DataHolder(np.dot(Y, Y.T))
+        self.YYT = gpflow.param.DataHolder(np.dot(Y, Y.T))
 
     def build_likelihood(self):
         """
@@ -49,7 +50,7 @@ class OMGP(CollapsedMixture):
             B_inv = tf.diag(1. / ((phi[:, i] + 1e-6) / self.noise_variance))
 
             # Make more stable using cholesky factorization:
-            LB = tf.cholesky(K + B_inv + tf.eye(self.num_data) * 1e-6)
+            LB = tf.cholesky(K + B_inv + tf.eye(self.num_data,dtype=float_type) * 1e-6)
             Blogdet = 2.*tf.reduce_sum(tf.log(tf.diag_part(LB)))
             # Data fit
             GP_bound -= 0.5 * tf.trace(tf.cholesky_solve(LB, self.YYT))
@@ -76,7 +77,7 @@ class OMGP(CollapsedMixture):
         # "stable" ones)
         # Predict mean
         B_inv = tf.diag(1. / ((phi[:, i] + 1e-6) / self.noise_variance))
-        LB = tf.cholesky(K + B_inv + tf.eye(self.num_data)*1e-6)
+        LB = tf.cholesky(K + B_inv + tf.eye(self.num_data,dtype=float_type)*1e-6)
         mu = tf.matmul(tf.transpose(kx), tf.cholesky_solve(LB, self.Y))
 
         # Predict variance
@@ -86,7 +87,7 @@ class OMGP(CollapsedMixture):
         return mu, tf.diag_part(va)
 
 
-    @GPflow.param.AutoFlow((tf.float64, [None, None]))
+    @gpflow.param.AutoFlow((tf.float64, [None, None]))
     def predict_components(self, Xnew):
         """The predictive density under each component"""
         phi = tf.nn.softmax(self.logphi)
@@ -102,7 +103,7 @@ class OMGP(CollapsedMixture):
         return tf.transpose(tf.squeeze(tf.stack(mus),[2])), tf.transpose(tf.stack(vas))
 
 
-    @GPflow.param.AutoFlow((tf.float64, [None, None]))
+    @gpflow.param.AutoFlow((tf.float64, [None, None]))
     def sample(self, Xnew, gp=0, size=10, full_cov=True):
         ''' Sample the posterior of a component
         '''
