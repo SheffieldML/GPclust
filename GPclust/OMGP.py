@@ -13,14 +13,15 @@ class OMGP(CollapsedMixture):
     Overlapping mixtures of Gaussian processes
     """
     def __init__(self, X, Y, num_clusters=2, kernels=None, noise_variance=1., alpha=1., prior_Z='symmetric', name='OMGP'):
+        self._parent = None # Have to put this here or Param throws an error
+
         num_data, self.D = Y.shape
         self.Y = gpflow.param.DataHolder(Y, on_shape_change='raise')
         self.X = gpflow.param.DataHolder(X, on_shape_change='pass')
         #assert X.shape[0] == self.D, "input data don't match observations"
 
         self.TWOPI = 2.0*np.pi
-        self.noise_variance = gpflow.param.Param(noise_variance, transform=gpflow.transforms.positive)
-
+        self.noise_variance = gpflow.param.Param(noise_variance,gpflow.transforms.positive)
         CollapsedMixture.__init__(self, num_data, num_clusters, prior_Z, alpha)
 
         if kernels is None:
