@@ -11,6 +11,6 @@ setup(
     keywords = " clustering Gaussian-process machine-learning",
     download_url = 'https://github.com/jameshensman/gpclust/tarball/0.1',
     packages=['GPclust'],
-    install_requires=['GPy>=0.6'],
+    install_requires=['GPflow>=0.4.0'],
     classifiers=[]
 )
