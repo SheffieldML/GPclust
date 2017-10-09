@@ -41,7 +41,7 @@ class MOGP(CollapsedMixture):
         if Z is None:
             # Choose 10 inducing points across the range of X
             Z = np.linspace(np.min(X),np.max(X),10)
-        
+
         self.Z = Z
 
         #initialize variational parameters
@@ -56,9 +56,8 @@ class MOGP(CollapsedMixture):
     def build_likelihood(self):
         loglik = 0.
         phi = tf.nn.softmax(self.logphi)
-        temp = []
         for i, (Xi, Yi) in enumerate(zip(self.X, self.Y)):
-            # get mean and variance of each GP at the obseved points. the
+            # get mean and variance of each GP at the observed points. the
             # different mean and variances for the clusters are stored in the
             # columns.
             mu, var = gpflow.conditionals.conditional(Xi, self.Z, self.kern, self.q_mu,
@@ -70,7 +69,6 @@ class MOGP(CollapsedMixture):
             # Get variational expectations.
             var_exp = self.likelihood.variational_expectations(mu, var, Ystacked)
             phi_i = phi[i]
-            temp.append(tf.reduce_sum(phi_i * tf.reduce_sum(var_exp, 0)))
             loglik += tf.reduce_sum(phi_i * tf.reduce_sum(var_exp, 0))
 
         KL_u = gpflow.kullback_leiblers.gauss_kl(self.q_mu, self.q_sqrt, self.kern.K(self.Z))
@@ -90,5 +88,4 @@ class MOGP(CollapsedMixture):
 
     @gpflow.param.AutoFlow((tf.float64, [None, None]))
     def predict_components(self, Xnew):
-
         return mu, var

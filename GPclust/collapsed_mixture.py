@@ -161,9 +161,11 @@ class CollapsedMixture(CollapsedVB):
 
         # this procedure equally assigns data to the new and old clusters,
         # aside from one random point, which is in the new cluster
-        special = np.random.permutation(indexN)[0]
-        logphi[indexN, -1] = logphi[indexN, indexK].copy()
+        special             = np.random.permutation(indexN)[0]
+        logphi[indexN, -1]  = logphi[indexN, indexK].copy()
         logphi[special, -1] = np.max(logphi[special])+10
+
+        # Reset logphi for this number of clusters
         self.set_vb_param(logphi)
 
         self.optimize(maxiter=maxiter, verbose=verbose)
