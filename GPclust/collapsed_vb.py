@@ -14,7 +14,7 @@ class CollapsedVB(GPy.core.Model):
     A base class for collapsed variational models, using the GPy framework for
     non-variational parameters.
 
-    Optimisation of the (collapsed) variational paremters is performed by
+    Optimisation of the (collapsed) variational parameters is performed by
     Riemannian conjugate-gradient ascent, interleaved with optimisation of the
     non-variational parameters
 
@@ -313,7 +313,7 @@ class CollapsedVB(GPy.core.Model):
     def optimize_parameters(self):
         """
         Optimises the model parameters (non variational parameters)
-        Returns the increment in the bound acheived
+        Returns the increment in the bound achieved
         """
         if self.optimizer_array.size>0:
             start = self.bound()
