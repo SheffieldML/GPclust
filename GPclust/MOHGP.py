@@ -15,7 +15,7 @@ class MOHGP(CollapsedMixture):
     """
     A Hierarchical Mixture of Gaussian Processes
 
-    A hierarchy is formed by using a GP model the mean function of a cluster,
+    A hierarchy is formed by using a GP to model the mean function of a cluster,
     and further GPs to model the deviation of each time-course in the cluster
     from the mean.
 
@@ -24,9 +24,9 @@ class MOHGP(CollapsedMixture):
     X        - The times of observation of the time series in a (Tx1) np.array
     Y        - A np.array of the observed time-course values: each row contains a time series, each column represents a unique time point
     kernF    - A GPy kernel to model the mean function of each cluster
-    kernY    - A GPy kernel to model the deviation of each of the time courses from the mean fro teh cluster
-    alpha    - The a priori Dirichlet concentrationn parameter (default 1.)
-    prior_Z  - Either 'symmetric' or 'dp', specifies whether to use a symmetric dirichelt prior for the clusters, or a (truncated) Dirichlet Process.
+    kernY    - A GPy kernel to model the deviation of each of the time courses from the mean of the cluster
+    alpha    - The a priori Dirichlet concentration parameter (default 1.)
+    prior_Z  - Either 'symmetric' or 'dp', specifies whether to use a symmetric dirichlet prior for the clusters, or a (truncated) Dirichlet process.
     name     - A convenient string for printing the model (default MOHGP)
 
     """
@@ -189,11 +189,11 @@ class MOHGP(CollapsedMixture):
 
         on_subplots (bool) whether to plot all the clusters on separate subplots (True), or all on the same plot (False)
         colour      (bool) to cycle through colours (True) or plot in black nd white (False)
-        newfig      (bool) whether to make a new matplotlib figure(True) or use the current figure (False)
+        newfig      (bool) whether to make a new matplotlib figure (True) or use the current figure (False)
         in_a_row    (bool) if true, plot the subplots (if using) in a single row. Else make the subplots approximately square.
         joined      (bool) if true, connect the data points with lines
-        gpplot      (bool) if true, plto the posterior of the GP for each cluster.
-        min_in_cluster (float) ignore clusterse with less total assignemnt than this
+        gpplot      (bool) if true, plot the posterior of the GP for each cluster.
+        min_in_cluster (float) ignore clusterse with less total assignment than this
         data_in_grey (bool) whether the data should be plotted in black and white.
         numbered    (bool) whether to include numbers on the top-right of each subplot.
         data_in_replicate (bool) whether to assume the data are in replicate, and plot the mean of each replicate instead of each data point
