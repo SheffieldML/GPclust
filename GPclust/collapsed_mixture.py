@@ -16,7 +16,7 @@ class CollapsedMixture(CollapsedVB):
     """
     A base class for collapsed mixture models based on the CollapsedVB class
 
-    We inherrit from this to build mixtures of Gaussians, mixures of GPs etc.
+    We inherrit from this to build mixtures of Gaussians, mixtures of GPs etc.
 
     This handles the mixing proportion part of the model,
     as well as providing generic functions for a merge-split approach
@@ -26,9 +26,9 @@ class CollapsedMixture(CollapsedVB):
         Arguments
         =========
         N: the number of data
-        K: the (initial) number of cluster (or truncation)
+        K: the (initial) number of clusters (or truncation)
         prior_Z  - either 'symmetric' or 'DP', specifies whether to use a symmetric Dirichlet prior for the clusters, or a (truncated) Dirichlet Process.
-        alpha: parameter of the Dirichelt (process)
+        alpha: parameter of the Dirichlet (process)
 
         """
         CollapsedVB.__init__(self, name)
@@ -48,7 +48,7 @@ class CollapsedMixture(CollapsedVB):
 
     def set_vb_param(self,phi_):
         """
-        Accept a vector representing the variatinoal parameters, and reshape it into self.phi
+        Accept a vector representing the variational parameters, and reshape it into self.phi
         """
         self.phi_ = phi_.reshape(self.N, self.K)
         self.phi, logphi, self.H = softmax_weave(self.phi_)
