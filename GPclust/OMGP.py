@@ -204,7 +204,7 @@ class OMGP(CollapsedMixture):
         XX = np.linspace(self.X.min(), self.X.max())[:, None]
 
         if self.Y.shape[1] == 1:
-            plt.scatter(self.X, self.Y, c=self.phi[:, gp_num], cmap=cm.RdBu, vmin=0., vmax=1., lw=0.5)
+            plt.scatter(self.X[:, 0], self.Y[:, 0], c=self.phi[:, gp_num], cmap=cm.RdBu, vmin=0., vmax=1., lw=0.5)
             plt.colorbar(label='GP {} assignment probability'.format(gp_num))
 
             try:
